@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: joaquin
+      POSTGRES_PASSWORD: joaquin
+      POSTGRES_DB: joaquin
+    ports:
+      - "5432:5432"
+    volumes:
+      - joaquin-db:/var/lib/postgresql/data
+volumes:
+  joaquin-db:
