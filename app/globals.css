@@ -231,3 +231,44 @@
 .jq-range:focus-visible { box-shadow: 0 0 0 3px rgba(255,201,60,.6); }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ——— Íconos animados del menú ——— */
+.ni :is(.ni-bob,.ni-beat,.ni-float,.ni-pulse,.ni-twinkle,.ni-smoke,.ni-wobble,.ni-step,.ni-pop,.ni-flap,.ni-line,.ni-ring,.ni-shackle) { transform-box: fill-box; transform-origin: center; }
+.ni .ni-d2 { animation-delay: .35s !important; }
+.ni .ni-d3 { animation-delay: .7s !important; }
+.ni .ni-bob { animation: ni-bob 2.4s ease-in-out infinite; }
+.ni .ni-beat { animation: ni-beat 1.3s ease-in-out infinite; }
+.ni .ni-float { animation: ni-float 2.6s ease-in-out infinite; }
+.ni .ni-pulse { animation: ni-pulse 2s ease-in-out infinite; }
+.ni .ni-twinkle { animation: ni-twinkle 1.8s ease-in-out infinite; }
+.ni .ni-blink { animation: ni-blink 3s steps(1) infinite; }
+.ni .ni-smoke { animation: ni-smoke 2.4s ease-out infinite; transform-origin: center; }
+.ni .ni-hand { transform-box: view-box; transform-origin: 24px 26px; animation: ni-spin 4s linear infinite; }
+.ni .ni-wobble { transform-origin: 50% 100%; animation: ni-wobble 2.6s ease-in-out infinite; }
+.ni .ni-step { animation: ni-step 2.4s ease-in-out infinite; }
+.ni .ni-pop { animation: ni-popup 2.4s ease-in-out infinite; }
+.ni .ni-flap { transform-origin: 50% 0%; animation: ni-flap 2.4s ease-in-out infinite; }
+.ni .ni-page { transform-box: view-box; transform-origin: 24px 26px; animation: ni-page 3s ease-in-out infinite; }
+.ni .ni-line { transform-origin: 0% 50%; animation: ni-line 2.6s ease-in-out infinite; }
+.ni .ni-ring { animation: ni-ring 1.8s ease-out infinite; }
+.ni .ni-shackle { animation: ni-shackle 2.6s ease-in-out infinite; }
+.ni.ni-paused * { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .ni * { animation: none !important; } }
+
+@keyframes ni-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes ni-beat { 0%,100% { transform: scale(1); } 15% { transform: scale(1.12); } 30% { transform: scale(.97); } 45% { transform: scale(1.08); } }
+@keyframes ni-float { 0% { transform: translateY(2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-6px); opacity: 0; } }
+@keyframes ni-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+@keyframes ni-twinkle { 0%,100% { transform: scale(.6) rotate(0); opacity: .4; } 50% { transform: scale(1.1) rotate(45deg); opacity: 1; } }
+@keyframes ni-blink { 0%,70%,100% { fill: #FFC93C; } 72%,90% { fill: #FFF3C2; } }
+@keyframes ni-smoke { 0% { transform: translate(0,3px) scale(.5); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(3px,-6px) scale(1.2); opacity: 0; } }
+@keyframes ni-spin { to { transform: rotate(360deg); } }
+@keyframes ni-wobble { 0%,60%,100% { transform: rotate(0); } 66% { transform: rotate(-9deg); } 74% { transform: rotate(8deg); } 82% { transform: rotate(-5deg); } 90% { transform: rotate(3deg); } }
+@keyframes ni-step { 0%,100% { opacity: .25; transform: scale(.85); } 40%,60% { opacity: 1; transform: scale(1.05); } }
+@keyframes ni-popup { 0%,20% { transform: translateY(8px); opacity: 0; } 45%,75% { transform: translateY(-3px); opacity: 1; } 100% { transform: translateY(-8px); opacity: 0; } }
+@keyframes ni-flap { 0%,15%,85%,100% { transform: scaleY(1); } 40%,60% { transform: scaleY(-.75); } }
+@keyframes ni-page { 0%,25% { transform: scaleX(1); } 50%,75% { transform: scaleX(-1); } 100% { transform: scaleX(1); } }
+@keyframes ni-line { 0% { transform: scaleX(.15); } 40%,100% { transform: scaleX(1); } }
+@keyframes ni-ring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(2.1); opacity: 0; } }
+@keyframes ni-shackle { 0%,60%,100% { transform: translateY(0); } 70%,85% { transform: translateY(-3px); } }
+.group:hover .ni.ni-paused *, .group:focus-visible .ni.ni-paused * { animation-play-state: running; }

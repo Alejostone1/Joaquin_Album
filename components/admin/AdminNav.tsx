@@ -1,12 +1,13 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { NavIcon, type NavIconName } from "./NavIcons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BubbleWord } from "@/components/ui/BubbleWord";
 
-type Item = { href: string; label: string; hint: string; color: string; icon: IconName; exact?: boolean; admin?: boolean };
+type Item = { href: string; label: string; hint: string; color: string; icon: NavIconName; exact?: boolean; admin?: boolean };
 const ITEMS: Item[] = [
   { href: "/admin", label: "Inicio", hint: "Resumen y novedades", color: "#2BA36B", icon: "home", exact: true },
   { href: "/admin/biblioteca", label: "Fotos y videos", hint: "Subir y ver todo", color: "#1FB5B0", icon: "photo" },
@@ -44,8 +45,8 @@ export function AdminNav({ isAdmin, isEditor, name }: { isAdmin: boolean; isEdit
             const on = i.exact ? path === i.href : path.startsWith(i.href);
             return (
               <Link key={i.href} href={i.href} aria-current={on ? "page" : undefined} className="group flex items-center gap-3 rounded-2xl px-3 py-2 font-heading text-[17px] font-bold transition hover:bg-white" style={{ background: on ? `${i.color}22` : undefined }}>
-                <span className={`grid h-8 w-8 place-items-center rounded-xl transition ${on ? "scale-110 text-papel" : "group-hover:scale-110"}`} style={{ background: on ? i.color : `${i.color}1f`, color: on ? undefined : i.color }}>
-                  <Icon name={i.icon} className="h-[18px] w-[18px]" />
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition ${on ? "scale-110" : "group-hover:scale-110"}`} style={{ background: on ? `${i.color}33` : `${i.color}14` }}>
+                  <NavIcon name={i.icon} color={i.color} className="h-8 w-8" paused={!on} />
                 </span>
                 {i.label}
               </Link>
@@ -67,6 +68,7 @@ export function AdminNav({ isAdmin, isEditor, name }: { isAdmin: boolean; isEdit
   );
 }
 
+const INK_C = "#21372B";
 type IconName = "home" | "photo" | "heart" | "clock" | "egg" | "steps" | "mail" | "book" | "list" | "people" | "share" | "user" | "plus" | "grid" | "eye" | "out";
 const PATHS: Record<IconName, string> = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
@@ -96,6 +98,7 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
 
 function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: string; name: string; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
+  const drag = useDragControls();
   const isOn = (i: Item) => (i.exact ? path === i.href : path.startsWith(i.href));
   const current = items.find(isOn) ?? items[0];
   // en el formulario de un recuerdo, la barra inferior la ocupa el botón de guardar
@@ -123,8 +126,8 @@ function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: strin
           <BubbleWord text="Joaquín" className="text-2xl" animate={false} />
         </Link>
         <button onClick={() => setOpen(true)} className="flex min-w-0 items-center gap-2 rounded-full border-2 bg-white py-1 pl-1 pr-3 shadow-soft" style={{ borderColor: `${current.color}55` }} aria-label="Abrir el menú de secciones">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-papel" style={{ background: current.color }}>
-            <Icon name={current.icon} className="h-4 w-4" />
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: `${current.color}26` }}>
+            <NavIcon name={current.icon} color={current.color} className="h-7 w-7" />
           </span>
           <span className="truncate font-heading text-sm font-extrabold">{current.label}</span>
           <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={3} aria-hidden>
@@ -175,17 +178,22 @@ function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: strin
               role="dialog"
               aria-modal="true"
               aria-label="Secciones del administrador"
-              className="absolute inset-x-0 bottom-0 max-h-[88svh] overflow-y-auto rounded-t-[2rem] bg-papel px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-lift"
+              className="absolute inset-x-0 bottom-0 max-h-[90svh] touch-pan-y overflow-y-auto overscroll-contain rounded-t-[2rem] bg-papel px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-lift [-webkit-overflow-scrolling:touch]"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
               drag="y"
+              dragControls={drag}
+              dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.6 }}
-              onDragEnd={(_, info) => info.offset.y > 120 && setOpen(false)}
+              onDragEnd={(_, info) => info.offset.y > 110 && setOpen(false)}
             >
-              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-tinta/20" aria-hidden />
+              {/* sólo la manija arrastra para cerrar; el resto se desplaza normal */}
+              <div className="-mx-4 -mt-3 flex cursor-grab touch-none justify-center pb-3 pt-3" onPointerDown={(e) => drag.start(e)} aria-hidden>
+                <span className="h-1.5 w-12 rounded-full bg-tinta/25" />
+              </div>
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="font-ui text-xs font-bold uppercase tracking-[0.2em] text-tinta-mute">Hola, {name.split(" ")[0]}</p>
@@ -195,23 +203,25 @@ function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: strin
                   ×
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 min-[400px]:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {items.map((i, k) => {
                   const on = isOn(i);
                   return (
-                    <motion.div key={i.href} initial={{ opacity: 0, y: 24, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.04 * k, type: "spring", stiffness: 260, damping: 20 }}>
+                    <motion.div key={i.href} initial={{ opacity: 0, y: 26, scale: 0.88 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.035 * k, type: "spring", stiffness: 280, damping: 20 }}>
                       <Link
                         href={i.href}
                         onClick={() => setOpen(false)}
                         aria-current={on ? "page" : undefined}
-                        className="flex h-full flex-col items-start gap-2 rounded-[1.4rem] border-[3px] p-3 transition active:scale-95"
-                        style={{ borderColor: on ? i.color : "transparent", background: `${i.color}${on ? "33" : "17"}` }}
+                        className="group relative flex h-full flex-col items-start gap-1.5 overflow-hidden rounded-[1.5rem] border-[3px] p-3 transition active:scale-[.96]"
+                        style={{ borderColor: on ? INK_C : `${i.color}33`, background: `linear-gradient(150deg, ${i.color}2b, ${i.color}0d 70%)`, boxShadow: on ? `0 4px 0 ${INK_C}` : `0 3px 0 ${i.color}40` }}
                       >
-                        <span className="grid h-11 w-11 place-items-center rounded-2xl text-papel shadow-soft" style={{ background: i.color }}>
-                          <Icon name={i.icon} className="h-6 w-6" />
+                        <span className="pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full opacity-25" style={{ background: i.color }} aria-hidden />
+                        <span className="relative grid h-16 w-16 place-items-center rounded-[1.2rem] border-[3px] border-tinta bg-papel shadow-[0_3px_0_#21372b] transition group-hover:-rotate-6 group-active:rotate-6">
+                          <NavIcon name={i.icon} color={i.color} className="h-12 w-12" />
                         </span>
-                        <span className="font-heading text-[15px] font-extrabold leading-tight">{i.label}</span>
-                        <span className="-mt-1 font-ui text-[11px] font-semibold leading-snug text-tinta-mute">{i.hint}</span>
+                        <span className="mt-1 font-heading text-[16px] font-extrabold leading-tight">{i.label}</span>
+                        <span className="font-ui text-[11.5px] font-semibold leading-snug text-tinta-soft">{i.hint}</span>
+                        {on && <span className="absolute right-2.5 top-2.5 rounded-full bg-tinta px-2 py-0.5 font-ui text-[10px] font-bold text-papel">Aquí estás</span>}
                       </Link>
                     </motion.div>
                   );
@@ -236,8 +246,8 @@ function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: strin
 function Tab({ item, on, label }: { item: Item; on: boolean; label?: string }) {
   return (
     <Link href={item.href} aria-current={on ? "page" : undefined} className="flex flex-col items-center gap-1 py-1">
-      <motion.span whileTap={{ scale: 0.88 }} className="grid h-10 w-10 place-items-center rounded-2xl transition" style={{ background: on ? item.color : "transparent", color: on ? "#FFFCF5" : item.color }}>
-        <Icon name={item.icon} className="h-6 w-6" />
+      <motion.span whileTap={{ scale: 0.85 }} animate={on ? { y: [0, -4, 0] } : { y: 0 }} transition={{ duration: 0.4 }} className="grid h-11 w-11 place-items-center rounded-2xl transition" style={{ background: on ? `${item.color}33` : "transparent" }}>
+        <NavIcon name={item.icon} color={item.color} className="h-9 w-9" paused={!on} />
       </motion.span>
       <span className="font-ui text-[11px] font-extrabold" style={{ color: on ? item.color : undefined }}>
         {label ?? item.label}
