@@ -1,11 +1,11 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray, or } from "drizzle-orm";
 import Link from "next/link";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { PageTitle, Panel, StatusBadge } from "@/components/admin/ui";
 import { StegoArt } from "@/components/ui/DinoArt";
 import { WatercolorBlob } from "@/components/ui/Watercolor";
 import { redirect } from "next/navigation";
-import { getCurrentUser, hasRole, requireUser } from "@/lib/auth";
+import { getCurrentUser, getOwnerIds, hasRole, requireUser } from "@/lib/auth";
 import { SCENE_META } from "@/lib/constants";
 import { db, schema } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -14,6 +14,7 @@ export default async function AdminHome() {
   const current = await getCurrentUser();
   if (current && !hasRole(current, "EDITOR")) redirect("/admin/cuenta");
   const user = await requireUser("EDITOR");
+  const owners = user.isOwner ? [] : await getOwnerIds();
   const [published, drafts, photos, videos, moments, letters, people, recent, activity] = await Promise.all([
     db.$count(schema.memories, eq(schema.memories.status, "PUBLISHED")),
     db.$count(schema.memories, eq(schema.memories.status, "DRAFT")),
@@ -21,9 +22,14 @@ export default async function AdminHome() {
     db.$count(schema.media, eq(schema.media.kind, "VIDEO")),
     db.$count(schema.milestones),
     db.$count(schema.letters),
-    db.$count(schema.users),
-    db.query.memories.findMany({ orderBy: [desc(schema.memories.updatedAt)], limit: 6, with: { author: { columns: { name: true } }, chapter: { columns: { title: true } } } }),
-    db.select().from(schema.activity).orderBy(desc(schema.activity.createdAt)).limit(40),
+    db.$count(schema.users, owners.length ? notInArray(schema.users.id, owners) : undefined),
+    db.query.memories.findMany({ orderBy: [desc(schema.memories.updatedAt)], limit: 6, with: { author: { columns: { name: true, isOwner: true } }, chapter: { columns: { title: true } } } }),
+    db
+      .select()
+      .from(schema.activity)
+      .where(owners.length ? and(or(isNull(schema.activity.userId), notInArray(schema.activity.userId, owners))) : undefined)
+      .orderBy(desc(schema.activity.createdAt))
+      .limit(40),
   ]);
   const stats = [
     { n: published, label: "recuerdos publicados", color: "#FF8A7A", href: "/admin/recuerdos" },
@@ -90,7 +96,7 @@ export default async function AdminHome() {
                 <p className="font-ui text-xs font-bold text-tinta-mute">
                   {m.chapter?.title ?? SCENE_META[m.scene].title}
                   {m.date ? ` · ${formatDate(m.date)}` : ""}
-                  {m.author ? ` · por ${m.author.name}` : ""}
+                  {m.author && (!m.author.isOwner || user.isOwner) ? ` · por ${m.author.name}` : ""}
                 </p>
               </div>
               <StatusBadge status={m.status} />

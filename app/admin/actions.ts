@@ -374,6 +374,12 @@ export async function saveScene(_prev: ActionResult, form: FormData): Promise<Ac
 }
 
 // ——— Personas con acceso (sólo administradores) ———
+/** El dueño oculto sólo lo puede tocar él mismo: para los demás, no existe. */
+async function assertNotHiddenOwner(me: { isOwner?: boolean }, id: string) {
+  if (me.isOwner) return;
+  const u = await db.query.users.findFirst({ where: eq(schema.users.id, id), columns: { isOwner: true } });
+  if (!u || u.isOwner) throw new AuthError(403, "Esa persona ya no existe.");
+}
 const ROLES = Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>;
 
 export async function createUser(_prev: ActionResult, form: FormData): Promise<ActionResult> {
@@ -413,6 +419,7 @@ export async function createUser(_prev: ActionResult, form: FormData): Promise<A
 export async function updateUser(id: string, data: { role?: string; active?: boolean; relation?: string; name?: string }): Promise<ActionResult> {
   return guard(async () => {
     const me = await assertUser("ADMIN");
+    await assertNotHiddenOwner(me, id);
     if (id === me.id && (data.role && data.role !== "ADMIN" || data.active === false)) {
       return { ok: false, error: "No puedes quitarte a ti mismo el rol de administrador ni desactivarte." };
     }
@@ -433,7 +440,8 @@ export async function updateUser(id: string, data: { role?: string; active?: boo
 
 export async function resetUserPassword(id: string, password: string): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("ADMIN");
+    const me = await assertUser("ADMIN");
+    await assertNotHiddenOwner(me, id);
     z.string().min(8, "La clave debe tener al menos 8 caracteres.").max(200).parse(password);
     await db.update(schema.users).set({ passwordHash: await hashPassword(password) }).where(eq(schema.users.id, id));
     await db.delete(schema.sessions).where(eq(schema.sessions.userId, id));
@@ -444,6 +452,7 @@ export async function resetUserPassword(id: string, password: string): Promise<A
 export async function deleteUser(id: string): Promise<ActionResult> {
   return guard(async () => {
     const me = await assertUser("ADMIN");
+    await assertNotHiddenOwner(me, id);
     if (id === me.id) return { ok: false, error: "No puedes eliminar tu propia cuenta." };
     const admins = await db.$count(schema.users, and(eq(schema.users.role, "ADMIN"), ne(schema.users.id, id)));
     if (admins === 0) return { ok: false, error: "Debe quedar al menos un administrador." };
@@ -491,6 +500,7 @@ async function issueInvite(userId: string) {
 export async function createInviteLink(userId: string): Promise<ActionResult> {
   return guard(async () => {
     const me = await assertUser("ADMIN");
+    await assertNotHiddenOwner(me, userId);
     const u = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
     if (!u) return { ok: false, error: "Esa persona ya no existe." };
     const link = await issueInvite(userId);

@@ -75,8 +75,8 @@ export async function getStoryData(who: Viewer, opts: { preview?: boolean } = {}
       with: {
         stage: true,
         cover: true,
-        author: { columns: { name: true, relation: true } },
-        editor: { columns: { name: true, relation: true } },
+        author: { columns: { name: true, relation: true, isOwner: true } },
+        editor: { columns: { name: true, relation: true, isOwner: true } },
         media: { with: { media: true }, orderBy: [asc(schema.memoryMedia.order)] },
       },
     }),
@@ -161,8 +161,9 @@ export async function getStoryData(who: Viewer, opts: { preview?: boolean } = {}
       status: m.status,
       stage: m.stage ? { name: m.stage.name, color: m.stage.color } : null,
       media,
-      author: m.author ? { name: m.author.name, relation: m.author.relation } : null,
-      editor: m.editor && m.editor.name !== m.author?.name ? { name: m.editor.name, relation: m.editor.relation } : null,
+      // el dueño del álbum no aparece como autor para nadie más
+      author: m.author && (!m.author.isOwner || viewer.isOwner) ? { name: m.author.name, relation: m.author.relation } : null,
+      editor: m.editor && m.editor.name !== m.author?.name && (!m.editor.isOwner || viewer.isOwner) ? { name: m.editor.name, relation: m.editor.relation } : null,
     });
   }
 

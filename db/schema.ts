@@ -72,6 +72,8 @@ export const users = pgTable("users", {
   inviteTokenHash: text("invite_token_hash"),
   inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
   role: roleEnum("role").notNull().default("FAMILY"),
+  /** dueño del álbum: acceso total e invisible para los demás (no aparece en personas, historial ni autorías) */
+  isOwner: boolean("is_owner").notNull().default(false),
   relation: text("relation"),
   active: boolean("active").notNull().default(true),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),

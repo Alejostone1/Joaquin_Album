@@ -24,7 +24,8 @@ async function main() {
     const existing = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (existing) {
       adminId = existing.id;
-      console.log(`• El administrador ${email} ya existe`);
+      if (!existing.isOwner || existing.role !== "ADMIN") await db.update(schema.users).set({ isOwner: true, role: "ADMIN", active: true }).where(eq(schema.users.id, existing.id));
+      console.log(`• El administrador ${email} ya existe (dueño oculto)`);
     } else {
       if (password.length < 8) throw new Error("ADMIN_PASSWORD debe tener al menos 8 caracteres");
       const [u] = await db
@@ -34,6 +35,7 @@ async function main() {
           email,
           passwordHash: await bcrypt.hash(password, 12),
           role: "ADMIN",
+          isOwner: true,
         })
         .returning();
       adminId = u.id;

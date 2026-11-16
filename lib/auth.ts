@@ -20,6 +20,8 @@ export type SessionUser = {
   email: string;
   role: RoleId;
   relation: string | null;
+  /** dueño oculto (super administrador) */
+  isOwner?: boolean;
 };
 
 export function hasRole(user: Pick<SessionUser, "role"> | null | undefined, min: RoleId) {
@@ -74,6 +76,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       role: schema.users.role,
       relation: schema.users.relation,
       active: schema.users.active,
+      isOwner: schema.users.isOwner,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
@@ -98,7 +101,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       // en Server Components no se pueden escribir cookies; se renovará en la próxima acción
     }
   }
-  return { id: row.id, name: row.name, email: row.email, role: row.role, relation: row.relation };
+  return { id: row.id, name: row.name, email: row.email, role: row.role, relation: row.relation, isOwner: row.isOwner };
 });
 
 /** Para páginas: redirige a la portada si no hay sesión o el rol no alcanza. */
@@ -158,3 +161,9 @@ export function registerFailedLogin(key: string) {
 export function clearLoginAttempts(key: string) {
   attempts.delete(key);
 }
+
+/** Ids de los dueños ocultos: los demás no los ven en personas, historial ni como autores. */
+export const getOwnerIds = cache(async (): Promise<string[]> => {
+  const rows = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.isOwner, true));
+  return rows.map((r) => r.id);
+});

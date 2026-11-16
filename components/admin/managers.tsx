@@ -661,7 +661,7 @@ function CustomChapterCard({ row, onDone }: { row?: CustomRow; onDone?: () => vo
 }
 
 // ——— Personas ———
-type UserRow = { id: string; name: string; email: string; role: RoleId; relation: string | null; active: boolean; lastLoginAt: string | null; pending: boolean; inviteActive: boolean };
+type UserRow = { id: string; name: string; email: string; role: RoleId; relation: string | null; active: boolean; lastLoginAt: string | null; pending: boolean; inviteActive: boolean; owner?: boolean };
 
 export function UserManager({ rows, meId }: { rows: UserRow[]; meId: string }) {
   const [state, action] = useActionState<ActionResult, FormData>(createUser, { ok: false });
@@ -764,6 +764,7 @@ function UserCard({ u, me }: { u: UserRow; me: boolean }) {
           <p className="font-heading text-xl font-bold">
             {u.name} {me && <span className="chip bg-menta">Tú</span>} {!u.active && <span className="chip bg-coral-100">Desactivado</span>}{" "}
             {u.pending && <span className="chip bg-sol-100">Falta aceptar la invitación</span>}
+            {u.owner && <span className="chip bg-tinta text-papel">Dueño · invisible para los demás</span>}
           </p>
           <p className="font-ui text-sm font-semibold text-tinta-mute">
             {u.email}
