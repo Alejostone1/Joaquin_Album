@@ -102,13 +102,14 @@ export function MemoryBoard({ items }: { items: BoardItem[] }) {
                       const r = await reorderMemories((latest.current[scene] ?? []).map((x) => x.id));
                       toast(r.ok ? "Orden guardado." : r.error ?? "No se pudo ordenar.", r.ok ? "ok" : "error");
                     }}
-                    className="flex items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-papel p-2 pr-4"
+                    className="flex items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-papel p-2 pr-3 sm:pr-4"
                   >
                     {filter === "ALL" && <span className="cursor-grab select-none px-1 text-xl text-tinta-mute" aria-hidden>⋮⋮</span>}
                     {m.cover ? <Media media={m.cover} className="h-16 w-16 shrink-0 rounded-xl" sizes="80px" /> : <div className="h-16 w-16 shrink-0 rounded-xl bg-salvia-100" />}
-                    <Link href={`/admin/recuerdos/${m.id}`} className="min-w-0 flex-1">
-                      <p className="truncate font-heading text-lg font-bold">{m.title}</p>
-                      <p className="truncate font-ui text-xs font-bold text-tinta-mute">
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                    <Link href={`/admin/recuerdos/${m.id}`} className="w-full min-w-0 flex-1">
+                      <p className="line-clamp-2 font-heading text-lg font-bold leading-tight">{m.title}</p>
+                      <p className="mt-0.5 font-ui text-xs font-bold leading-relaxed text-tinta-mute">
                         {m.date ? `${formatDate(m.date)} · ` : ""}
                         {m.count} {m.count === 1 ? "archivo" : "archivos"} · {PRESENTATION_LABELS[m.presentation].name}
                         {m.author ? ` · por ${m.author}` : ""}
@@ -132,6 +133,7 @@ export function MemoryBoard({ items }: { items: BoardItem[] }) {
                     >
                       <StatusBadge status={m.status} />
                     </button>
+                    </div>
                   </Reorder.Item>
                 ))}
               </Reorder.Group>

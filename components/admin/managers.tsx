@@ -86,7 +86,7 @@ export function MilestoneManager({ rows, library: lib, stages }: { rows: Milesto
   const toast = useToast();
   const router = useRouter();
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1fr_420px]">
       <div className="space-y-2">
         <button className="btn-candy mb-3" onClick={() => setEditing("new")}>
           Agregar un momento
@@ -96,17 +96,18 @@ export function MilestoneManager({ rows, library: lib, stages }: { rows: Milesto
           const meta = MILESTONE_LABELS[r.type];
           const media = library.find((m) => m.id === r.mediaId);
           return (
-            <div key={r.id} className="flex items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-papel p-3">
+            <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-papel p-3 sm:flex-nowrap">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-papel" style={{ background: meta.color }}>
                 <MilestoneIcon type={r.type} />
               </span>
               {media && <Media media={media} className="h-12 w-12 shrink-0 rounded-xl" sizes="60px" />}
-              <button className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
-                <p className="truncate font-heading text-lg font-bold">{r.title}</p>
+              <button className="min-w-0 flex-1 basis-[55%] text-left" onClick={() => setEditing(r)}>
+                <p className="line-clamp-2 font-heading text-lg font-bold leading-tight">{r.title}</p>
                 <p className="font-ui text-xs font-bold text-tinta-mute">
                   {formatDate(r.date)} · {meta.name}
                 </p>
               </button>
+              <div className="ml-auto flex items-center gap-2">
               <StatusBadge status={r.status} />
               <ConfirmButton
                 onConfirm={async () => {
@@ -117,6 +118,7 @@ export function MilestoneManager({ rows, library: lib, stages }: { rows: Milesto
               >
                 Eliminar
               </ConfirmButton>
+              </div>
             </div>
           );
         })}
@@ -146,7 +148,7 @@ function MilestoneForm({ row, library, setLibrary, stages, onDone }: { row: Mile
     }
   });
   return (
-    <Panel className="sticky top-6">
+    <Panel className="lg:sticky lg:top-6">
       <form action={action} className="space-y-4">
         <h2 className="font-heading text-2xl font-extrabold">{row ? "Editar momento" : "Nuevo momento"}</h2>
         {row && <input type="hidden" name="id" value={row.id} />}
@@ -228,7 +230,7 @@ export function StageManager({ rows }: { rows: StageRow[] }) {
   latest.current = list;
   useEffect(() => setList(rows), [rows]);
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1fr_380px]">
       <div>
         <button className="btn-candy mb-4" onClick={() => setEditing("new")}>
           Nueva etapa
@@ -329,7 +331,7 @@ export function LetterManager({ rows }: { rows: LetterRow[] }) {
   const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_440px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1fr_440px]">
       <div className="space-y-2">
         {rows.length === 0 && <p className="rounded-3xl bg-crema p-6 text-tinta-soft">Todavía no hay cartas. La familia puede escribirlas desde el capítulo “Cartas para mi futuro”.</p>}
         {rows.map((l) => (
@@ -444,7 +446,7 @@ export function BirthForm({ row, library: lib }: { row: BirthRow; library: Libra
     }
   });
   return (
-    <form action={action} className="grid gap-6 lg:grid-cols-[1fr_340px]">
+    <form action={action} className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1fr_340px]">
       <Panel className="space-y-4">
         <p className="rounded-2xl bg-rosa-100 p-4 font-ui text-sm font-bold">Todos los datos son opcionales. Lo que dejes vacío aparecerá como “Pronto” en la historia, nunca se inventa.</p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -678,7 +680,7 @@ export function UserManager({ rows, meId }: { rows: UserRow[]; meId: string }) {
     }
   });
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1fr_380px]">
       <div className="space-y-3">
         {rows.map((u) => (
           <UserCard key={u.id} u={u} me={u.id === meId} />

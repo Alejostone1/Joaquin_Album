@@ -167,7 +167,6 @@ function MobileNav({ items, path, name, onLogout }: { items: Item[]; path: strin
           </div>
         </nav>
       )}
-      {!inForm && <div className="h-24 lg:hidden" aria-hidden />}
 
       {/* menú de mosaicos */}
       <AnimatePresence>

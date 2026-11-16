@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2" aria-live="polite">
+      <div className="pointer-events-none fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-[60] lg:bottom-4 flex flex-col items-end gap-2" aria-live="polite">
         <AnimatePresence>
           {toasts.map((t) => (
             <motion.div

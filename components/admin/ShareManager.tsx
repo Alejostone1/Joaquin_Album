@@ -26,7 +26,7 @@ export function ShareManager({ rows }: { rows: Row[] }) {
     }
   }, [state, router]);
   return (
-    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[380px_1fr]">
       <Panel>
         <form ref={formRef} action={action} className="space-y-4">
           <h2 className="font-heading text-2xl font-extrabold">Nuevo enlace</h2>

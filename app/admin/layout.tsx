@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <ToastProvider>
       <div className="min-h-[100svh] bg-papel lg:flex">
         <AdminNav isAdmin={hasRole(user, "ADMIN")} isEditor={hasRole(user, "EDITOR")} name={user.name} />
-        <main className="min-w-0 flex-1 px-4 py-8 sm:px-8 lg:px-12 lg:py-12">{children}</main>
+        <main className="min-w-0 flex-1 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-8 sm:px-8 lg:px-12 lg:py-12">{children}</main>
       </div>
     </ToastProvider>
   );
