@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Panel } from "./ui";
 
 export type ActivityRow = { id: string; userName: string; action: string; entity: string; entityId: string | null; summary: string; createdAt: string };
@@ -43,6 +43,9 @@ function group(rows: ActivityRow[]) {
 export function ActivityFeed({ rows, compact = false }: { rows: ActivityRow[]; compact?: boolean }) {
   const people = useMemo(() => Array.from(new Set(rows.map((r) => r.userName))), [rows]);
   const [who, setWho] = useState<string | null>(null);
+  // el "hace X min" se calcula en el navegador (evita diferencias con el servidor)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const list = group(rows.filter((r) => !who || r.userName === who));
   if (!rows.length) return <Panel className="text-center font-ui font-bold text-tinta-mute">Todavía no hay movimientos. Cuando alguien suba fotos o publique un recuerdo, aparecerá aquí.</Panel>;
   return (
@@ -74,7 +77,7 @@ export function ActivityFeed({ rows, compact = false }: { rows: ActivityRow[]; c
                 <b>{r.userName}</b> {r.summary}
               </p>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-3 font-ui text-xs font-bold text-tinta-mute">
-                {ago(r.createdAt)}
+                <span suppressHydrationWarning>{mounted ? ago(r.createdAt) : "\u00a0"}</span>
                 {r.entity === "MEMORY" && r.entityId && r.action !== "DELETE" && (
                   <Link href={`/historia?preview=1#recuerdo-${r.entityId}`} className="text-turquesa underline decoration-2 underline-offset-2">
                     Ver en la historia

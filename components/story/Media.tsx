@@ -169,6 +169,27 @@ function VideoTile({ media, className, imgClassName, style, onOpen, contain, con
   };
   const pct = dur ? (time / dur) * 100 : 0;
 
+  // miniatura del administrador (va dentro de botones): vista previa sin controles
+  if (!onOpen) {
+    return (
+      <div className={`relative overflow-hidden bg-bosque-900 ${className}`} style={style}>
+        <video
+          ref={ref}
+          src={`${media.orig}#t=0.1`}
+          className={`h-full w-full ${contain ? "object-contain" : "object-cover"} ${imgClassName}`}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          onError={() => setError(true)}
+          aria-label={media.alt}
+        />
+        <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-tinta/70 px-2 py-0.5 font-ui text-[10px] font-bold uppercase tracking-wider text-papel">▶ Video</span>
+        {error && <span className="absolute inset-0 grid place-items-center p-2 text-center font-ui text-xs font-bold text-papel/90">No se puede previsualizar</span>}
+      </div>
+    );
+  }
+
   return (
     <div className={`group relative overflow-hidden bg-bosque-900 ${className}`} style={style}>
       <video
