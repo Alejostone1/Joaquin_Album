@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
 import type { MemoryDTO } from "@/lib/types";
@@ -137,8 +137,16 @@ export function Cinematic({ memory, accent }: P) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bosque-900/85 via-transparent to-bosque-900/25" />
         <div className="sub pointer-events-none absolute inset-x-0 bottom-[12vh] z-[3] mx-auto max-w-5xl px-6 text-papel">
           <Meta memory={memory} accent={accent} light />
-          <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
-          {memory.description && <p className="mt-4 max-w-2xl text-lg font-semibold leading-relaxed text-papel/90 sm:text-xl">{memory.description}</p>}
+          <motion.div initial={false} animate={{ scale: active === 0 ? 1 : 0.62 }} style={{ transformOrigin: "left bottom" }} transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}>
+            <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
+          </motion.div>
+          <AnimatePresence initial={false}>
+            {memory.description && active === 0 && (
+              <motion.p key="d" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-4 max-w-2xl overflow-hidden text-lg font-semibold leading-relaxed text-papel/90 sm:text-xl">
+                {memory.description}
+              </motion.p>
+            )}
+          </AnimatePresence>
           {current?.caption && (
             <motion.p key={current.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 inline-block rounded-full bg-papel/15 px-4 py-1.5 font-heading text-lg font-bold">
               {current.caption}
