@@ -220,3 +220,6 @@
 @media (prefers-reduced-motion: reduce) {
   .jq-fall, .jq-glow, .jq-fly-a, .jq-fly-b, .jq-bob, .jq-grass { animation: none !important; display: none; }
 }
+
+@keyframes jq-kenburns { from { transform: scale(1.02) translate3d(0, 0, 0); } to { transform: scale(1.14) translate3d(-2%, -1.5%, 0); } }
+.jq-kenburns { animation: jq-kenburns 9s ease-out both; }

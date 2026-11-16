@@ -20,16 +20,8 @@ type Props = {
   galleryTitle?: string;
 };
 
-function ExpandIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden>
-      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-    </svg>
-  );
-}
-
 /** Foto con miniatura borrosa mientras carga (carga progresiva) o video privado. */
-export function Media({ media, className = "", imgClassName = "", sizes = "(min-width: 1024px) 60vw, 100vw", priority, ambient, style, fill, gallery, galleryTitle }: Props) {
+export function Media({ media, className = "", imgClassName = "", sizes = "(min-width: 1024px) 60vw, 100vw", priority, style, fill, gallery, galleryTitle }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -62,26 +54,7 @@ export function Media({ media, className = "", imgClassName = "", sizes = "(min-
   }
 
   if (media.kind === "VIDEO") {
-    return (
-      <div className={`group relative overflow-hidden bg-bosque-900 ${className}`} style={style}>
-        <video
-          src={`${media.orig}#t=0.1`}
-          className={`h-full w-full object-cover ${imgClassName}`}
-          playsInline
-          preload="metadata"
-          controls={!ambient}
-          muted={ambient}
-          autoPlay={ambient}
-          loop={ambient}
-          aria-label={media.alt}
-        />
-        {openable && (
-          <button onClick={open} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-papel/85 text-tinta shadow-soft transition hover:scale-110" aria-label="Ver en grande">
-            <ExpandIcon />
-          </button>
-        )}
-      </div>
-    );
+    return <VideoTile media={media} className={className} imgClassName={imgClassName} style={style} onOpen={openable ? open : undefined} />;
   }
 
   return (
@@ -117,6 +90,58 @@ export function Media({ media, className = "", imgClassName = "", sizes = "(min-
           Recarga la página.
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Video dentro de la historia: se reproduce solo, en silencio y en bucle cuando aparece
+ * en pantalla (y se pausa al salir). Tocarlo lo abre en grande con sonido.
+ */
+function VideoTile({ media, className, imgClassName, style, onOpen }: { media: MediaDTO; className: string; imgClassName: string; style?: React.CSSProperties; onOpen?: (e?: React.MouseEvent) => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) v.play().catch(() => {});
+        else v.pause();
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(v);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div className={`group relative overflow-hidden bg-bosque-900 ${onOpen ? "cursor-zoom-in" : ""} ${className}`} style={style} onClick={onOpen}>
+      <video
+        ref={ref}
+        src={`${media.orig}#t=0.1`}
+        className={`h-full w-full object-cover transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"} ${imgClassName}`}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        onLoadedData={() => setReady(true)}
+        onCanPlay={() => setReady(true)}
+        onError={() => setError(true)}
+        aria-label={media.alt}
+      />
+      {!ready && !error && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-bosque-700 to-bosque-900" />}
+      {error && (
+        <div className="absolute inset-0 grid place-items-center p-4 text-center font-ui text-sm font-bold text-papel/90">
+          Este video no se puede reproducir en este navegador.
+        </div>
+      )}
+      {onOpen && (
+        <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-papel/90 px-3 py-1.5 font-ui text-xs font-bold text-tinta shadow-soft transition group-hover:scale-105">
+          ▶ Ver con sonido
+        </span>
+      )}
+      <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-tinta/70 px-2.5 py-1 font-ui text-[11px] font-bold uppercase tracking-wider text-papel">Video</span>
     </div>
   );
 }

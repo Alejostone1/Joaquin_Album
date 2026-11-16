@@ -30,7 +30,7 @@ export default function IntroCanvas({ tier: initialTier, start, skip, exitKey, o
     <Canvas
       shadows={shadows ? "soft" : false}
       dpr={dpr}
-      camera={{ fov: 40, near: 0.1, far: 320, position: [2, 10.5, 30] }}
+      camera={{ fov: 40, near: 0.1, far: 320, position: [12, 38, 62] }}
       gl={{ antialias: tier !== "low", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping }}
       onCreated={({ gl }) => {
         gl.toneMappingExposure = 1.05;

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Sfx } from "@/components/audio/engine";
 import { BabyDino } from "./BabyDino";
+import { softDot } from "./materials";
 import { groundHeight, PERCH, seededRandom } from "./Forest";
 import { Pterodactyl } from "./Pterodactyl";
 import type { DinoAction, LookMode } from "./rig";
@@ -24,9 +25,11 @@ type Props = {
   sfx: (s: Sfx) => void;
 };
 
-// Recorrido cinematográfico de la cámara: sobre el dosel → entre helechos → al claro
+// Recorrido cinematográfico: sobre las nubes → atraviesa las nubes → sobre el dosel → entre helechos → al claro
 const CAM_PATH = new THREE.CatmullRomCurve3(
   [
+    new THREE.Vector3(12, 38, 62),
+    new THREE.Vector3(7, 24, 46),
     new THREE.Vector3(2, 10.5, 30),
     new THREE.Vector3(7.5, 6.2, 20),
     new THREE.Vector3(1.5, 2.6, 13.5),
@@ -37,6 +40,8 @@ const CAM_PATH = new THREE.CatmullRomCurve3(
   "centripetal",
 );
 const LOOK_PATH = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(-4, 22, -10),
+  new THREE.Vector3(-2, 10, -12),
   new THREE.Vector3(0, 3.5, -8),
   new THREE.Vector3(-1, 2.2, -6),
   new THREE.Vector3(-2.2, 1.1, -1.5),
@@ -61,6 +66,8 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
   const [triceCel, setTriceCel] = useState(0);
   const [pteroCel, setPteroCel] = useState(0);
   const [hatched, setHatched] = useState<Record<string, boolean>>({});
+  const [flyKey, setFlyKey] = useState(0);
+  const shake = useRef(0);
   const triceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const exitTl = useRef<gsap.core.Timeline | null>(null);
 
@@ -89,32 +96,45 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       setStegoAction("idle");
       setStegoLook("pointer");
       setPhase("title");
+      setHatched((h) => ({ ...h, main: true }));
       const id = setTimeout(() => setPhase("ready"), 900);
       return () => clearTimeout(id);
     }
     setPhase("flying");
     const tl = gsap.timeline();
-    tl.to(progress.current, { cam: 1, look: 1, duration: 10.5, ease: "power2.inOut" }, 0);
-    tl.call(() => sfx("flap"), [], 1.2);
+    tl.to(progress.current, { cam: 1, look: 1, duration: 13.5, ease: "power2.inOut" }, 0);
+    tl.call(() => sfx("whoosh"), [], 0.8);
+    // un pterodáctilo pasa rozando la cámara
+    tl.call(() => {
+      setFlyKey((k) => k + 1);
+      sfx("flap");
+    }, [], 3.4);
+    tl.call(() => sfx("flap"), [], 6.2);
     // aparece entre la vegetación
-    tl.call(() => setStegoAction("walk"), [], 5.6);
-    tl.to(s.position, { x: STEGO_TO.x, z: STEGO_TO.z, duration: 3.6, ease: "sine.inOut" }, 5.6);
+    tl.call(() => setStegoAction("walk"), [], 8.6);
+    tl.to(s.position, { x: STEGO_TO.x, z: STEGO_TO.z, duration: 3.6, ease: "sine.inOut" }, 8.6);
     tl.call(() => {
       setStegoAction("idle");
       setStegoLook("camera");
-    }, [], 9.2);
-    // gira hacia la cámara y la mira
-    tl.to(s.rotation, { y: 0.72, duration: 0.9, ease: "back.out(2)" }, 9.2);
-    tl.call(() => sfx("rawr"), [], 9.9);
-    tl.call(() => setStegoCel((k) => k + 1), [], 10.0);
+    }, [], 12.2);
+    // gira hacia la cámara, la mira y ruge (la cámara tiembla un poco)
+    tl.to(s.rotation, { y: 0.72, duration: 0.9, ease: "back.out(2)" }, 12.2);
+    tl.call(() => {
+      sfx("rawr");
+      shake.current = 0.09;
+    }, [], 12.9);
+    tl.call(() => setStegoCel((k) => k + 1), [], 13.0);
     tl.call(() => {
       sfx("chime");
       setPhase("title");
-    }, [], 10.6);
+      // el huevo se abre justo cuando aparece el nombre
+      setHatched((h) => ({ ...h, main: true }));
+      setTimeout(() => sfx("sparkle"), 300);
+    }, [], 13.6);
     tl.call(() => {
       setStegoLook("pointer");
       setPhase("ready");
-    }, [], 12.4);
+    }, [], 15.4);
     return () => {
       tl.kill();
     };
@@ -163,6 +183,11 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       pos.x += state.pointer.x * 0.45 + Math.sin(t * 0.25) * 0.12;
       pos.y += state.pointer.y * 0.18 + Math.sin(t * 0.33) * 0.05;
     }
+    if (shake.current > 0.001) {
+      pos.x += (Math.random() - 0.5) * shake.current;
+      pos.y += (Math.random() - 0.5) * shake.current;
+      shake.current *= Math.exp(-5 * delta);
+    }
     camera.position.x = THREE.MathUtils.damp(camera.position.x, pos.x, 4, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, pos.y, 4, delta);
     camera.position.z = THREE.MathUtils.damp(camera.position.z, pos.z, 4, delta);
@@ -187,6 +212,8 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
   const triceY = groundHeight(2.9, -0.9);
   return (
     <group>
+      <CloudPass />
+      <FlybyPtero flyKey={flyKey} shadows={false} />
       <Stegosaurus
         groupRef={stego}
         action={stegoAction}
@@ -297,4 +324,80 @@ function FlyingPtero({ shadows, celebrateKey, onPoke }: { shadows: boolean; cele
     if (next !== action) setAction(next);
   });
   return <Pterodactyl groupRef={ref} action={action} celebrateKey={celebrateKey} onPoke={onPoke} shadows={shadows} scale={1.15} />;
+}
+
+/** Nubes que la cámara atraviesa al comienzo de la película. */
+function CloudPass() {
+  const camera = useThree((st) => st.camera);
+  const sprites = useRef<THREE.Sprite[]>([]);
+  const items = useMemo(() => {
+    const rand = seededRandom(2024);
+    return Array.from({ length: 26 }, () => {
+      const u = 0.04 + rand() * 0.3;
+      const p = CAM_PATH.getPoint(u);
+      return { pos: new THREE.Vector3(p.x + (rand() - 0.5) * 16, p.y + (rand() - 0.5) * 6 - 1, p.z + (rand() - 0.5) * 10), s: 5 + rand() * 9 };
+    });
+  }, []);
+  const mat = useMemo(() => new THREE.SpriteMaterial({ map: softDot(), color: "#ffffff", transparent: true, depthWrite: false, fog: false, opacity: 0.9 }), []);
+  useFrame(() => {
+    sprites.current.forEach((sp, i) => {
+      if (!sp) return;
+      const d = sp.position.distanceTo(camera.position);
+      // se desvanecen al tocar la cámara para evitar un fogonazo blanco
+      (sp.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.clamp((d - 1.5) / 7, 0, 1) * 0.85 * (camera.position.y > 9 ? 1 : 0);
+      sp.scale.setScalar(items[i].s);
+    });
+  });
+  return (
+    <group>
+      {items.map((it, i) => (
+        <sprite key={i} ref={(el) => void (sprites.current[i] = el!)} position={it.pos} material={mat.clone()} />
+      ))}
+    </group>
+  );
+}
+
+/** Pterodáctilo que cruza frente a la cámara durante el vuelo inicial. */
+function FlybyPtero({ flyKey, shadows }: { flyKey: number; shadows: boolean }) {
+  const ref = useRef<THREE.Group>(null!);
+  const camera = useThree((st) => st.camera);
+  const anim = useRef<{ t0: number; from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
+  const clock = useThree((st) => st.clock);
+  useEffect(() => {
+    if (!flyKey) return;
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+    const base = camera.position.clone().addScaledVector(fwd, 7);
+    anim.current = {
+      t0: clock.elapsedTime,
+      from: base.clone().addScaledVector(right, -11).add(new THREE.Vector3(0, 1.2, 0)),
+      to: base.clone().addScaledVector(right, 12).add(new THREE.Vector3(0, -1.5, 0)).addScaledVector(fwd, -2),
+    };
+  }, [flyKey, camera, clock]);
+  useFrame((state) => {
+    const a = anim.current;
+    const g = ref.current;
+    if (!a) {
+      g.visible = false;
+      return;
+    }
+    const k = (state.clock.elapsedTime - a.t0) / 2.6;
+    if (k > 1) {
+      g.visible = false;
+      anim.current = null;
+      return;
+    }
+    g.visible = true;
+    const e = k * k * (3 - 2 * k);
+    g.position.lerpVectors(a.from, a.to, e);
+    g.position.y += Math.sin(k * Math.PI) * 1.2;
+    const dir = a.to.clone().sub(a.from);
+    g.rotation.set(0, Math.atan2(dir.x, dir.z), -0.25);
+  });
+  return (
+    <group ref={ref} visible={false}>
+      <Pterodactyl action="fly" look="none" shadows={shadows} scale={2.2} />
+    </group>
+  );
 }

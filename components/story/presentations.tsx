@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useSpring } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
 import type { MemoryDTO } from "@/lib/types";
 import { WatercolorBlob } from "@/components/ui/Watercolor";
@@ -97,25 +97,68 @@ function NoMedia({ memory, accent }: { memory: MemoryDTO; accent: string }) {
   );
 }
 
-// 1 ——— Cine: pantalla completa con franjas y subtítulos
+// 1 ——— Cine: una película con todas las fotos y videos (una toma por pantalla)
 export function Cinematic({ memory, accent }: P) {
   const ref = useRef<HTMLElement>(null);
-  useScrollFx(ref, (el) => {
-    gsap.fromTo(el.querySelector(".kb"), { scale: 1.18, yPercent: -4 }, { scale: 1, yPercent: 4, ease: "none", scrollTrigger: { trigger: el, start: "top bottom", end: "bottom top", scrub: true } });
-    gsap.from(el.querySelectorAll(".sub > *"), { y: 40, opacity: 0, stagger: 0.12, duration: 1, ease: "power3.out", scrollTrigger: { trigger: el, start: "top 45%" } });
-  });
-  const [main] = memory.media;
-  if (!main) return <NoMedia memory={memory} accent={accent} />;
+  const shots = memory.media;
+  const [active, setActive] = useState(0);
+  useScrollFx(
+    ref,
+    (el) => {
+      ScrollTrigger.create({
+        trigger: el,
+        start: "top top",
+        end: "bottom bottom",
+        onUpdate: (self) => setActive(Math.min(shots.length - 1, Math.floor(self.progress * shots.length * 0.9999))),
+      });
+      gsap.from(el.querySelectorAll(".sub > *"), { y: 40, opacity: 0, stagger: 0.12, duration: 1, ease: "power3.out", scrollTrigger: { trigger: el, start: "top 45%" } });
+    },
+    [shots.length],
+  );
+  if (!shots.length) return <NoMedia memory={memory} accent={accent} />;
+  const current = shots[active];
   return (
-    <section ref={ref} className="film-bars relative h-[100svh] min-h-[520px] overflow-hidden bg-bosque-900">
-      <div className="kb absolute inset-0">
-        <Media gallery={memory.media} galleryTitle={memory.title} media={main} className="h-full w-full" sizes="100vw" ambient fill />
-      </div>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bosque-900/80 via-transparent to-bosque-900/20" />
-      <div className="sub pointer-events-none absolute inset-x-0 bottom-[12vh] z-[3] mx-auto max-w-5xl px-6 text-papel">
-        <Meta memory={memory} accent={accent} light />
-        <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
-        {memory.description && <p className="mt-4 max-w-2xl text-lg font-semibold leading-relaxed text-papel/90 sm:text-xl">{memory.description}</p>}
+    <section ref={ref} className="relative" style={{ height: `${Math.max(1, shots.length) * 100 + 20}vh` }}>
+      <div className="film-bars sticky top-0 h-[100svh] min-h-[520px] overflow-hidden bg-bosque-900">
+        {shots.map((m, i) => (
+          <motion.div
+            key={m.id}
+            className="absolute inset-0"
+            initial={false}
+            animate={{ opacity: i === active ? 1 : 0, scale: i === active ? 1 : 1.08, filter: i === active ? "blur(0px)" : "blur(6px)" }}
+            transition={{ duration: 1.1, ease: [0.4, 0, 0.2, 1] }}
+            aria-hidden={i !== active}
+          >
+            <div className={`h-full w-full ${i === active ? "jq-kenburns" : ""}`} style={{ animationDirection: i % 2 ? "reverse" : "normal" }}>
+              {Math.abs(i - active) <= 1 && <Media gallery={memory.media} galleryTitle={memory.title} media={m} className="h-full w-full" sizes="100vw" fill />}
+            </div>
+          </motion.div>
+        ))}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bosque-900/85 via-transparent to-bosque-900/25" />
+        <div className="sub pointer-events-none absolute inset-x-0 bottom-[12vh] z-[3] mx-auto max-w-5xl px-6 text-papel">
+          <Meta memory={memory} accent={accent} light />
+          <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
+          {memory.description && <p className="mt-4 max-w-2xl text-lg font-semibold leading-relaxed text-papel/90 sm:text-xl">{memory.description}</p>}
+          {current?.caption && (
+            <motion.p key={current.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 inline-block rounded-full bg-papel/15 px-4 py-1.5 font-heading text-lg font-bold">
+              {current.caption}
+            </motion.p>
+          )}
+        </div>
+        {shots.length > 1 && (
+          <div className="pointer-events-none absolute right-6 top-[11vh] z-[3] text-right text-papel">
+            <p className="font-display text-4xl font-semibold tabular-nums">
+              {String(active + 1).padStart(2, "0")}
+              <span className="text-xl opacity-60"> / {String(shots.length).padStart(2, "0")}</span>
+            </p>
+            <div className="mt-2 flex justify-end gap-1">
+              {shots.map((m, i) => (
+                <span key={m.id} className="h-1.5 rounded-full transition-all duration-500" style={{ width: i === active ? 28 : 8, background: i <= active ? accent : "rgba(255,252,245,.35)" }} />
+              ))}
+            </div>
+            {active < shots.length - 1 && <p className="mt-2 font-ui text-xs font-bold opacity-70">sigue bajando ↓</p>}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -129,9 +172,8 @@ export function Parallax({ memory, accent, index }: P) {
     gsap.fromTo(el.querySelector(".l-back"), { yPercent: 30 }, { yPercent: -40, ease: "none", scrollTrigger: st });
     gsap.fromTo(el.querySelector(".l-photo"), { yPercent: 10 }, { yPercent: -10, ease: "none", scrollTrigger: st });
     gsap.fromTo(el.querySelector(".l-card"), { yPercent: 40 }, { yPercent: -30, ease: "none", scrollTrigger: st });
-    gsap.fromTo(el.querySelector(".l-small"), { yPercent: 60, rotate: -8 }, { yPercent: -60, rotate: 6, ease: "none", scrollTrigger: st });
   });
-  const [main, second] = memory.media;
+  const [main] = memory.media;
   if (!main) return <NoMedia memory={memory} accent={accent} />;
   const flip = index % 2 === 1;
   return (
@@ -151,11 +193,6 @@ export function Parallax({ memory, accent, index }: P) {
           {memory.description && <p className="mt-4 text-lg leading-relaxed text-tinta-soft">{memory.description}</p>}
         </div>
       </div>
-      {second && (
-        <div className={`l-small absolute bottom-6 hidden w-56 md:block ${flip ? "left-10" : "right-10"}`}>
-          <Media gallery={memory.media} galleryTitle={memory.title} media={second} className="aspect-square rounded-3xl border-[6px] border-papel shadow-lift" sizes="240px" />
-        </div>
-      )}
     </section>
   );
 }
@@ -425,7 +462,20 @@ export function Mask({ memory, accent }: P) {
   );
 }
 
-export function MemoryView(props: P) {
+/** Cuántos archivos muestra cada estilo; el resto aparece en la cinta que sigue. */
+const SHOWN: Record<MemoryDTO["presentation"], number> = {
+  CINEMATIC: 999,
+  PARALLAX: 1,
+  ZOOM: 1,
+  EDITORIAL: 2,
+  OVERLAP: 5,
+  COLLAGE: 9,
+  SEQUENCE: 8,
+  REVEAL: 1,
+  MASK: 1,
+};
+
+function Presentation(props: P) {
   switch (props.memory.presentation) {
     case "CINEMATIC":
       return <Cinematic {...props} />;
@@ -446,4 +496,112 @@ export function MemoryView(props: P) {
     case "MASK":
       return <Mask {...props} />;
   }
+}
+
+export function MemoryView(props: P) {
+  const rest = props.memory.media.slice(SHOWN[props.memory.presentation]);
+  return (
+    <>
+      <Presentation {...props} />
+      {rest.length > 0 && <MediaReel items={rest} memory={props.memory} accent={props.accent} />}
+    </>
+  );
+}
+
+const FILM_HOLES = "repeating-linear-gradient(90deg, transparent 0 14px, rgba(255,252,245,.85) 14px 26px, transparent 26px 40px)";
+
+/**
+ * Cinta de película con el resto de fotos y videos del recuerdo.
+ * Escritorio: se desliza en horizontal mientras haces scroll. Celular: aparecen una a una.
+ */
+export function MediaReel({ items, memory, accent }: { items: MemoryDTO["media"]; memory: MemoryDTO; accent: string }) {
+  const ref = useRef<HTMLElement>(null);
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 900px)");
+    const on = () => setDesktop(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const pinned = desktop && items.length >= 3;
+  useScrollFx(
+    ref,
+    (el) => {
+      if (!pinned) return;
+      const track = el.querySelector<HTMLElement>(".reel-track")!;
+      const distance = () => Math.max(0, track.scrollWidth - window.innerWidth + 120);
+      const tl = gsap.timeline({ scrollTrigger: { trigger: el.querySelector(".reel-pin"), start: "top top", end: () => `+=${distance()}`, pin: true, scrub: 0.7, invalidateOnRefresh: true } });
+      tl.to(track, { x: () => -distance(), ease: "none" }, 0);
+      tl.to(el.querySelectorAll(".reel-inner"), { xPercent: 12, ease: "none" }, 0);
+    },
+    [pinned, items.length],
+  );
+
+  const ratio = (m: MemoryDTO["media"][number]) => (m.width && m.height ? m.width / m.height : m.kind === "VIDEO" ? 9 / 16 : 4 / 5);
+
+  if (!pinned) {
+    return (
+      <section ref={ref} className="mx-auto max-w-5xl px-5 pb-24">
+        <p className="mb-5 text-center font-ui text-xs font-bold uppercase tracking-[0.25em]" style={{ color: accent }}>
+          Más de «{memory.title}» · {items.length} {items.length === 1 ? "archivo" : "archivos"}
+        </p>
+        <div className={`grid gap-5 ${items.length === 1 ? "mx-auto max-w-md" : "sm:grid-cols-2"}`}>
+          {items.map((m, i) => (
+            <motion.div
+              key={m.id}
+              initial={{ opacity: 0, y: 60, rotate: i % 2 ? 5 : -5, clipPath: "inset(18% 18% 18% 18% round 28px)" }}
+              whileInView={{ opacity: 1, y: 0, rotate: i % 2 ? 1.5 : -1.5, clipPath: "inset(0% 0% 0% 0% round 28px)" }}
+              viewport={{ once: true, margin: "-12%" }}
+              transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1] }}
+              className="rounded-[1.8rem] bg-papel p-2.5 shadow-lift"
+            >
+              <Media media={m} gallery={memory.media} galleryTitle={memory.title} className="w-full rounded-[1.4rem]" style={{ aspectRatio: Math.min(1.6, Math.max(0.65, ratio(m))) }} sizes="(min-width: 640px) 45vw, 92vw" />
+              {m.caption && <p className="px-2 pb-1 pt-2 text-center font-heading font-bold text-tinta-soft">{m.caption}</p>}
+            </motion.div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section ref={ref} className="relative">
+      <div className="reel-pin relative flex h-[100svh] flex-col justify-center overflow-hidden bg-bosque-900">
+        <div className="pointer-events-none absolute inset-x-0 top-[7vh] h-6 opacity-40" style={{ backgroundImage: FILM_HOLES }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-[7vh] h-6 opacity-40" style={{ backgroundImage: FILM_HOLES }} />
+        <div className="absolute left-8 top-[12vh] z-10 max-w-sm text-papel">
+          <p className="font-ui text-xs font-bold uppercase tracking-[0.25em]" style={{ color: accent }}>
+            Más de este recuerdo
+          </p>
+          <p className="mt-1 font-heading text-3xl font-extrabold leading-tight">{memory.title}</p>
+          <p className="mt-1 font-ui text-sm font-bold text-papel/70">{items.length} fotos y videos · sigue bajando →</p>
+        </div>
+        <div className="reel-track flex items-center gap-10 pl-[34vw] pr-[12vw] will-change-transform">
+          {items.map((m, i) => (
+            <motion.div
+              key={m.id}
+              className="relative shrink-0 rounded-[1.6rem] bg-papel p-2.5 shadow-lift"
+              style={{ height: i % 3 === 1 ? "50vh" : "60vh", aspectRatio: Math.min(1.6, Math.max(0.6, ratio(m))) }}
+              initial={{ opacity: 0, scale: 0.75, rotate: i % 2 ? 9 : -9, y: 60 }}
+              whileInView={{ opacity: 1, scale: 1, rotate: i % 2 ? 2 : -2, y: i % 3 === 1 ? 40 : 0 }}
+              viewport={{ amount: 0.3 }}
+              transition={{ type: "spring", stiffness: 120, damping: 16 }}
+              whileHover={{ rotate: 0, scale: 1.03 }}
+            >
+              <div className="h-full w-full overflow-hidden rounded-[1.2rem]">
+                <div className="reel-inner h-full w-[112%] -translate-x-[6%]">
+                  <Media media={m} gallery={memory.media} galleryTitle={memory.title} className="h-full w-full" sizes="60vw" />
+                </div>
+              </div>
+              <span className="absolute -bottom-9 left-1 font-ui text-xs font-bold text-papel/60">
+                {String(i + 2).padStart(2, "0")} / {String(memory.media.length).padStart(2, "0")}
+                {m.caption ? ` · ${m.caption}` : ""}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
