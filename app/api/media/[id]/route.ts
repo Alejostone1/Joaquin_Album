@@ -34,11 +34,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // el original de una foto conserva metadatos (p. ej. ubicación): sólo para quienes editan
   if (variant === "orig" && item.kind === "IMAGE" && !hasRole(user, "EDITOR")) return new Response("Sin permiso", { status: 403 });
 
-  // Vercel Blob privado: redirección a un enlace firmado de pocos minutos
+  // Vercel Blob privado
   if (USE_BLOB) {
-    const { blobSignedUrl, blobVariantPath } = await import("@/lib/blob");
-    const url = await blobSignedUrl(blobVariantPath(item, variant as Variant));
-    return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "private, max-age=600", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
+    const { blobServe, blobSignedUrl, blobVariantPath } = await import("@/lib/blob");
+    const path = blobVariantPath(item, variant as Variant);
+    const isSmall = item.kind === "IMAGE" && variant !== "orig";
+    // Videos y originales: enlace firmado de pocos minutos (no pasan por la función)
+    if (!isSmall) {
+      try {
+        const url = await blobSignedUrl(path);
+        return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "private, max-age=600", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
+      } catch (e) {
+        console.error("presign", (e as Error).message);
+      }
+    }
+    // Fotos (versiones WebP livianas) o respaldo: se entregan directamente
+    const served = await blobServe(path, req.headers.get("range"));
+    if (!served) return notFound();
+    return new Response(served.stream, {
+      status: served.status,
+      headers: { ...served.headers, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex" },
+    });
   }
 
   const file = variantPath(item.storageKey, item.mimeType, variant as Variant);

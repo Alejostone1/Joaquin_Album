@@ -11,24 +11,54 @@ export function blobVariantPath(item: { storageKey: string; mimeType: string; or
   return `media/${item.storageKey}/${variant}.webp`;
 }
 
-// Un token de lectura para toda la tienda, reutilizado mientras sea válido;
-// con él se firman URLs de pocos minutos sin llamadas extra a la red.
-let cached: IssuedSignedToken | null = null;
-async function readToken() {
-  if (cached && cached.validUntil - Date.now() > 10 * 60 * 1000) return cached;
-  cached = await issueSignedToken({ pathname: "*", operations: ["get"], validUntil: Date.now() + 60 * 60 * 1000 });
-  return cached;
+// Tokens de lectura por archivo (la delegación debe nombrar la ruta exacta),
+// reutilizados mientras sigan vigentes para no llamar a la API en cada petición.
+const tokens = new Map<string, IssuedSignedToken>();
+async function readToken(pathname: string) {
+  const hit = tokens.get(pathname);
+  if (hit && Number(hit.validUntil) - Date.now() > 10 * 60 * 1000) return hit;
+  const t = await issueSignedToken({ pathname, operations: ["get"], validUntil: Date.now() + 60 * 60 * 1000 });
+  if (tokens.size > 500) tokens.clear();
+  tokens.set(pathname, t);
+  return t;
 }
 
 export async function blobSignedUrl(pathname: string, minutes = 15) {
-  const token = await readToken();
+  const token = await readToken(pathname);
   const { presignedUrl } = await presignUrl(token, {
     operation: "get",
     pathname,
     access: ACCESS,
-    validUntil: Math.min(token.validUntil, Date.now() + minutes * 60 * 1000),
+    validUntil: Math.min(Number(token.validUntil), Date.now() + minutes * 60 * 1000),
   });
   return presignedUrl;
+}
+
+/** Entrega un archivo privado a través de la función (con soporte de rangos para video). */
+export async function blobServe(pathname: string, range: string | null) {
+  const res = await get(pathname, { access: ACCESS, headers: range ? { Range: range } : undefined });
+  if (!res || !res.stream) return null;
+  const upstream = res.headers;
+  const headers: Record<string, string> = {
+    "Content-Type": res.blob.contentType || "application/octet-stream",
+    "Accept-Ranges": "bytes",
+  };
+  for (const h of ["content-length", "content-range", "etag", "last-modified"]) {
+    const v = upstream.get(h);
+    if (v) headers[h.replace(/(^|-)\w/g, (m) => m.toUpperCase())] = v;
+  }
+  const status = upstream.get("content-range") ? 206 : 200;
+  return { stream: res.stream, headers, status };
+}
+
+export async function blobStreamCheck(pathname: string) {
+  try {
+    const res = await get(pathname, { access: ACCESS });
+    await res?.stream?.cancel().catch(() => {});
+    return res?.statusCode ?? "not-found";
+  } catch (e) {
+    return `error: ${(e as Error).name}`;
+  }
 }
 
 async function readHead(pathname: string) {
