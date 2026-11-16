@@ -42,11 +42,11 @@ export default async function AdminHome() {
             <h1 className="mt-2 font-heading text-4xl font-extrabold sm:text-5xl">Hola, {user.name.split(" ")[0]}</h1>
             <p className="mt-2 max-w-md text-lg text-tinta-soft">¿Qué vamos a guardar hoy en la historia de Joaquín?</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/admin/biblioteca" className="btn-candy">
-                Subir fotos y videos
+              <Link href="/admin/recuerdos/nuevo" className="btn-candy">
+                Crear un recuerdo con fotos
               </Link>
-              <Link href="/admin/recuerdos/nuevo" className="btn-soft">
-                Crear un recuerdo
+              <Link href="/admin/biblioteca" className="btn-soft">
+                Ver la biblioteca
               </Link>
               <Link href="/admin/linea-de-tiempo" className="btn-soft">
                 Agregar un momento

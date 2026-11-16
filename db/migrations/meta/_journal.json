@@ -15,6 +15,13 @@
       "when": 1794780027791,
       "tag": "0001_original_path",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794845711711,
+      "tag": "0002_mover_recuerdo_antes",
+      "breakpoints": true
     }
   ]
 }

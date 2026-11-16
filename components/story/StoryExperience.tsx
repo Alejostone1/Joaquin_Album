@@ -14,6 +14,8 @@ import { detectQuality, prefersReducedMotion } from "@/lib/quality";
 import type { StoryData } from "@/lib/types";
 import { BirthScene, ChapterOpener, EmptyChapter, Ending, FamilyTable, LettersScene, MemoryList, Timeline } from "./chapters";
 import { ScrollTrigger } from "./useScrollFx";
+import { AmbientLayer, ChapterDivider, Curtain, ProgressTrail } from "./Ambient";
+import { LightboxProvider } from "./Lightbox";
 import { PteroArt, StegoArt, TriceArt } from "@/components/ui/DinoArt";
 
 const Companion = dynamic(() => import("./Companion"), { ssr: false });
@@ -61,6 +63,17 @@ export function StoryExperience({ data }: { data: StoryData }) {
     }
   }, [active, play]);
 
+  // ir directo a un recuerdo (#recuerdo-…) al volver del administrador
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+    const id = setTimeout(() => {
+      ScrollTrigger.refresh();
+      document.querySelector(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 2200);
+    return () => clearTimeout(id);
+  }, []);
+
   // el acompañante camina mientras haces scroll
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>;
@@ -77,7 +90,11 @@ export function StoryExperience({ data }: { data: StoryData }) {
   const go = (id: SceneId) => document.getElementById(SCENE_META[id].slug)?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" });
 
   return (
+    <LightboxProvider>
     <div className="relative overflow-x-clip" style={{ ["--accent" as string]: meta.accent }}>
+      <Curtain />
+      <AmbientLayer accent={meta.accent} />
+      <ProgressTrail accent={meta.accent} />
       {/* lavado de color del capítulo */}
       <div className="pointer-events-none fixed inset-0 -z-10 transition-colors duration-1000" style={{ background: meta.wash }} aria-hidden />
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-70" style={{ backgroundImage: "var(--grain)" }} aria-hidden />
@@ -90,13 +107,16 @@ export function StoryExperience({ data }: { data: StoryData }) {
         </div>
       )}
 
+      <div className="relative z-[1]">
       <Prologue scenes={scenes.map((s) => ({ id: s.id, title: s.title }))} onGo={go} name={data.viewer.name} />
 
       {scenes.map((scene, idx) => {
         const m = SCENE_META[scene.id];
         const list = data.memories[scene.id] ?? [];
         return (
-          <section key={scene.id} id={m.slug} aria-labelledby={`${m.slug}-t`} className="relative scroll-mt-20">
+          <div key={scene.id}>
+          {idx > 0 && <ChapterDivider accent={m.accent} index={idx} />}
+          <section id={m.slug} aria-labelledby={`${m.slug}-t`} className="relative scroll-mt-20">
             <span id={`${m.slug}-t`} className="sr-only">
               {scene.title}
             </span>
@@ -111,11 +131,30 @@ export function StoryExperience({ data }: { data: StoryData }) {
             ) : scene.id !== "LLEGADA" && scene.id !== "CRECIENDO" ? (
               <EmptyChapter canEdit={canEdit} accent={m.accent} label={scene.title} />
             ) : null}
+            {canEdit && scene.id !== "CARTAS" && list.length > 0 && (
+              <div className="flex justify-center pb-16 pt-4">
+                <Link href={`/admin/recuerdos/nuevo?capitulo=${scene.id}`} className="btn-soft" style={{ boxShadow: `0 4px 0 ${m.accent}` }}>
+                  + Agregar un recuerdo a “{scene.title}”
+                </Link>
+              </div>
+            )}
           </section>
+          </div>
         );
       })}
 
       <Ending />
+      </div>
+
+      {canEdit && (
+        <Link
+          href={`/admin/recuerdos/nuevo?capitulo=${active === "CARTAS" ? "AVENTURAS" : active}`}
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border-[3px] border-tinta px-5 py-3 font-heading text-base font-extrabold text-tinta shadow-[0_5px_0_#21372b] transition hover:-translate-y-1 sm:bottom-6 sm:right-6"
+          style={{ background: meta.accent === "#2F5D47" ? "#BDECD3" : "#FFC93C" }}
+        >
+          <span className="text-xl leading-none">+</span> Agregar recuerdo
+        </Link>
+      )}
 
       {/* compañero del capítulo */}
       <div className="pointer-events-none fixed bottom-2 left-2 z-30 h-[118px] w-[118px] sm:bottom-4 sm:left-4 sm:h-[190px] sm:w-[190px]" aria-hidden>
@@ -138,6 +177,7 @@ export function StoryExperience({ data }: { data: StoryData }) {
         ) : null}
       </div>
     </div>
+    </LightboxProvider>
   );
 }
 

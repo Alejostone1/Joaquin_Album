@@ -70,7 +70,7 @@ function uploadOne(file: File, onProgress: (p: number) => void) {
 }
 
 /** Zona para arrastrar o elegir varias fotos y videos, con vista previa y progreso. */
-export function Uploader({ onUploaded, compact = false }: { onUploaded: (item: LibraryItem) => void; compact?: boolean }) {
+export function Uploader({ onUploaded, compact = false, onBusyChange, title }: { onUploaded: (item: LibraryItem) => void; compact?: boolean; onBusyChange?: (busy: boolean) => void; title?: string }) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -125,6 +125,8 @@ export function Uploader({ onUploaded, compact = false }: { onUploaded: (item: L
     });
   };
 
+  const busy = queue.some((q) => q.status === "waiting" || q.status === "uploading");
+  useEffect(() => onBusyChange?.(busy), [busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const done = queue.filter((q) => q.status === "done").length;
   useEffect(() => {
     if (done && queue.every((q) => q.status === "done" || q.status === "error")) toast(`${done} ${done === 1 ? "archivo subido" : "archivos subidos"}.`);
@@ -148,10 +150,10 @@ export function Uploader({ onUploaded, compact = false }: { onUploaded: (item: L
         <motion.div animate={over ? { rotate: [0, -10, 10, 0] } : {}} transition={{ repeat: over ? Infinity : 0, duration: 0.6 }}>
           <EggIcon className={compact ? "h-12 w-10" : "h-20 w-16"} />
         </motion.div>
-        <p className="font-heading text-xl font-bold">{over ? "¡Suéltalas aquí!" : "Arrastra aquí fotos y videos"}</p>
+        <p className="font-heading text-xl font-bold">{over ? "¡Suéltalas aquí!" : title ?? "Arrastra aquí fotos y videos"}</p>
         <p className="font-ui text-sm font-semibold text-tinta-mute">JPG, PNG, WEBP, MP4, MOV… Las fotos originales se guardan intactas y en privado.</p>
-        <button type="button" className="btn-soft" onClick={() => input.current?.click()}>
-          Elegir archivos
+        <button type="button" className="btn-candy py-2.5 text-base" onClick={() => input.current?.click()}>
+          Elegir fotos y videos
         </button>
         <input
           ref={input}

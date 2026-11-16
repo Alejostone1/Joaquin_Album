@@ -139,6 +139,21 @@ export async function reorderMemories(ids: string[]): Promise<ActionResult> {
   }) as Promise<ActionResult>;
 }
 
+/** Ordena los recuerdos de un capítulo por fecha (los que no tienen fecha quedan al final). */
+export async function sortMemoriesByDate(scene: string): Promise<ActionResult> {
+  return guard(async () => {
+    await assertUser("EDITOR");
+    const sc = z.enum(SCENES).parse(scene);
+    const rows = await db.select({ id: schema.memories.id, date: schema.memories.date, order: schema.memories.order }).from(schema.memories).where(eq(schema.memories.scene, sc));
+    rows.sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : a.date ? -1 : b.date ? 1 : a.order - b.order));
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < rows.length; i++) await tx.update(schema.memories).set({ order: i }).where(eq(schema.memories.id, rows[i].id));
+    });
+    refresh("/admin/recuerdos");
+    return { ok: true, message: "Ordenados por fecha." };
+  }) as Promise<ActionResult>;
+}
+
 // ——— Biblioteca ———
 export async function updateMedia(id: string, data: { caption?: string; alt?: string }): Promise<ActionResult> {
   return guard(async () => {

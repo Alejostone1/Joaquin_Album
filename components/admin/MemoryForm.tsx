@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, Reorder } from "framer-motion";
+import { AnimatePresence, motion, Reorder } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
@@ -8,15 +8,17 @@ import { deleteMemory, saveMemory, type ActionResult } from "@/app/admin/actions
 import { Media } from "@/components/story/Media";
 import type { LibraryItem } from "@/lib/admin-data";
 import { PRESENTATION_LABELS, PRESENTATIONS, SCENE_META, SCENES, type PresentationId, type SceneId } from "@/lib/constants";
-import { MediaPicker } from "./MediaLibrary";
-import { ConfirmButton, FormMessage, Panel, SubmitButton, useToast } from "./ui";
+import { Footprint } from "@/components/ui/Watercolor";
+import { MediaPicker, Uploader } from "./MediaLibrary";
+import { ConfirmButton, FormMessage, Panel, useToast } from "./ui";
+import { useFormStatus } from "react-dom";
 
 export type MemoryFormValue = {
   id?: string;
   title: string;
   description: string;
   date: string;
-  scene: SceneId;
+  scene: SceneId | "";
   presentation: PresentationId;
   stageId: string;
   tags: string;
@@ -111,35 +113,88 @@ export function StyleThumb({ id, color = "#21372B" }: { id: PresentationId; colo
   );
 }
 
-export function MemoryForm({ initial, library: lib, stages }: { initial: MemoryFormValue; library: LibraryItem[]; stages: Array<{ id: string; name: string; color: string }> }) {
+function Step({ n, title, hint, children, color }: { n: number; title: string; hint?: string; children: React.ReactNode; color: string }) {
+  return (
+    <Panel>
+      <div className="mb-4 flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xl font-semibold text-papel" style={{ background: color }}>
+          {n}
+        </span>
+        <div>
+          <h2 className="font-heading text-2xl font-extrabold leading-tight">{title}</h2>
+          {hint && <p className="font-ui text-sm font-semibold text-tinta-mute">{hint}</p>}
+        </div>
+      </div>
+      {children}
+    </Panel>
+  );
+}
+
+function SaveButton({ label, disabled }: { label: string; disabled?: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending || disabled} className="btn-candy disabled:opacity-60">
+      {pending ? "Guardando…" : label}
+    </button>
+  );
+}
+
+export function MemoryForm({ initial, library: lib, stages, justSaved = false }: { initial: MemoryFormValue; library: LibraryItem[]; stages: Array<{ id: string; name: string; color: string }>; justSaved?: boolean }) {
   const [state, action] = useActionState<ActionResult, FormData>(saveMemory, { ok: false });
   const [library, setLibrary] = useState(lib);
   const [mediaIds, setMediaIds] = useState(initial.mediaIds);
   const [coverId, setCoverId] = useState(initial.coverId);
   const [presentation, setPresentation] = useState(initial.presentation);
   const [status, setStatus] = useState(initial.status);
-  const [scene, setScene] = useState(initial.scene);
+  const [scene, setScene] = useState<SceneId | "">(initial.scene);
   const [picker, setPicker] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [sceneError, setSceneError] = useState(false);
+  const [saved, setSaved] = useState<{ id: string; scene: SceneId; published: boolean } | null>(
+    justSaved && initial.id && initial.scene ? { id: initial.id, scene: initial.scene, published: initial.status === "PUBLISHED" } : null,
+  );
   const router = useRouter();
   const toast = useToast();
   const handled = useRef(state);
+  const stepOne = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (state === handled.current) return;
     handled.current = state;
-    if (state.ok) {
+    if (state.ok && state.id && scene) {
       toast(state.message ?? "Guardado.");
-      if (!initial.id && state.id) router.replace(`/admin/recuerdos/${state.id}`);
+      setSaved({ id: state.id, scene, published: status === "PUBLISHED" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (!initial.id) router.replace(`/admin/recuerdos/${state.id}?guardado=1`);
       else router.refresh();
     }
-  }, [state, initial.id, router, toast]);
+  }, [state, initial.id, router, toast, scene, status]);
 
   const byId = new Map(library.map((m) => [m.id, m]));
   const selected = mediaIds.map((id) => byId.get(id)).filter(Boolean) as LibraryItem[];
-  const accent = SCENE_META[scene].accent;
+  const accent = scene ? SCENE_META[scene].accent : "#2BA36B";
+  const move = (id: string, d: number) =>
+    setMediaIds((ids) => {
+      const i = ids.indexOf(id);
+      const j = i + d;
+      if (i < 0 || j < 0 || j >= ids.length) return ids;
+      const next = [...ids];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
 
   return (
-    <form action={action} className="grid gap-6 lg:grid-cols-[1fr_380px]">
+    <form
+      action={action}
+      onSubmit={(e) => {
+        if (!scene) {
+          e.preventDefault();
+          setSceneError(true);
+          stepOne.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }}
+      className="mx-auto max-w-3xl space-y-6 pb-28"
+    >
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       {mediaIds.map((id) => (
         <input key={id} type="hidden" name="mediaIds" value={id} />
@@ -147,146 +202,175 @@ export function MemoryForm({ initial, library: lib, stages }: { initial: MemoryF
       <input type="hidden" name="coverId" value={coverId} />
       <input type="hidden" name="presentation" value={presentation} />
       <input type="hidden" name="status" value={status} />
+      <input type="hidden" name="scene" value={scene} />
 
-      <div className="space-y-6">
-        <Panel>
-          <div className="space-y-4">
-            <div>
-              <label className="label" htmlFor="title">
-                Título
-              </label>
-              <input id="title" name="title" required maxLength={140} defaultValue={initial.title} className="field font-heading text-2xl font-bold" placeholder="Su primer baño" />
+      <AnimatePresence>
+        {saved && (
+          <motion.div initial={{ opacity: 0, y: -16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }} className="rounded-[1.8rem] border-[3px] border-tinta bg-menta p-5 shadow-soft">
+            <p className="font-heading text-2xl font-extrabold">¡Listo! 🦕</p>
+            <p className="mt-1 font-ui font-bold text-tinta-soft">
+              {saved.published ? "El recuerdo ya se ve" : "Quedó como borrador"} en el capítulo «{SCENE_META[saved.scene].title}».
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href={`/historia${saved.published ? "" : "?preview=1"}#recuerdo-${saved.id}`} className="btn-candy py-2.5 text-base">
+                Verlo en la historia
+              </Link>
+              <Link href={`/admin/recuerdos/nuevo?capitulo=${saved.scene}`} className="btn-soft">
+                Crear otro recuerdo
+              </Link>
             </div>
-            <div>
-              <label className="label" htmlFor="description">
-                Cuéntalo
-              </label>
-              <textarea id="description" name="description" rows={4} maxLength={4000} defaultValue={initial.description} className="field" placeholder="¿Qué pasó? ¿Quién estaba? ¿Qué sentimos?" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div ref={stepOne}>
+        <Step n={1} title="¿En qué capítulo va?" hint="Es la parte de la historia donde aparecerá." color={accent}>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Capítulo">
+            {SCENES.filter((s) => s !== "CARTAS").map((s, i) => {
+              const m = SCENE_META[s];
+              const on = scene === s;
+              return (
+                <motion.button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => {
+                    setScene(s);
+                    setSceneError(false);
+                  }}
+                  whileTap={{ scale: 0.96 }}
+                  animate={on ? { scale: [1, 1.05, 1] } : {}}
+                  className="relative flex flex-col items-start gap-1 rounded-2xl border-[3px] p-3 text-left transition"
+                  style={{ borderColor: on ? m.accent : "rgba(33,55,43,.08)", background: on ? `${m.accent}1f` : m.wash }}
+                >
+                  <Footprint className="h-6 w-6" color={m.accent} style={{ rotate: `${i % 2 ? 14 : -14}deg` }} />
+                  <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-tinta-mute">{m.chapter}</span>
+                  <span className="font-heading text-lg font-extrabold leading-tight">{m.title}</span>
+                  {on && <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full font-bold text-papel" style={{ background: m.accent }}>✓</span>}
+                </motion.button>
+              );
+            })}
+          </div>
+          {sceneError && <p className="mt-3 rounded-2xl bg-coral-100 px-4 py-2 font-ui text-sm font-bold text-coral-600">Elige el capítulo donde va este recuerdo.</p>}
+        </Step>
+      </div>
+
+      <Step n={2} title="Fotos y videos" hint="Arrástralas aquí o tócalas para elegirlas desde el celular. Se agregan solas al recuerdo." color={accent}>
+        <Uploader
+          compact
+          title="Arrastra aquí las fotos y videos de este recuerdo"
+          onBusyChange={setUploading}
+          onUploaded={(m) => {
+            setLibrary((l) => [m, ...l]);
+            setMediaIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]));
+          }}
+        />
+        <button type="button" className="mt-3 font-ui text-sm font-bold text-turquesa underline decoration-2 underline-offset-4" onClick={() => setPicker(true)}>
+          O elige de las que ya están en la biblioteca
+        </button>
+        {selected.length > 0 && (
+          <div className="mt-5">
+            <p className="label">En este recuerdo ({selected.length}) · la ★ es la foto principal · arrastra o usa las flechas para ordenar</p>
+            <Reorder.Group axis="y" values={mediaIds} onReorder={setMediaIds} className="space-y-2">
+              {selected.map((m, i) => (
+                <Reorder.Item key={m.id} value={m.id} className="flex cursor-grab items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-white p-2 active:cursor-grabbing">
+                  <Media media={m} className="h-20 w-20 shrink-0 rounded-xl" sizes="100px" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-ui text-sm font-bold">{m.caption || m.originalName}</p>
+                    <p className="font-ui text-xs font-semibold text-tinta-mute">{m.kind === "VIDEO" ? "Video" : "Foto"} {i + 1}</p>
+                  </div>
+                  <div className="flex flex-col">
+                    <button type="button" onClick={() => move(m.id, -1)} disabled={i === 0} className="h-7 w-8 rounded-lg font-bold disabled:opacity-20 hover:bg-tinta/5" aria-label="Subir">
+                      ↑
+                    </button>
+                    <button type="button" onClick={() => move(m.id, 1)} disabled={i === selected.length - 1} className="h-7 w-8 rounded-lg font-bold disabled:opacity-20 hover:bg-tinta/5" aria-label="Bajar">
+                      ↓
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => setCoverId(m.id)} aria-pressed={coverId === m.id} aria-label="Usar como foto principal" className={`grid h-10 w-10 place-items-center rounded-full text-xl ${coverId === m.id || (!coverId && mediaIds[0] === m.id) ? "bg-sol" : "bg-tinta/5"}`}>
+                    ★
+                  </button>
+                  <button type="button" onClick={() => setMediaIds((ids) => ids.filter((x) => x !== m.id))} className="rounded-full px-2 py-2 font-ui text-sm font-bold text-coral-600 hover:bg-coral-100" aria-label="Quitar del recuerdo">
+                    ✕
+                  </button>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          </div>
+        )}
+      </Step>
+
+      <Step n={3} title="Cuéntalo" color={accent}>
+        <div className="space-y-4">
+          <div>
+            <label className="label" htmlFor="title">
+              Título
+            </label>
+            <input id="title" name="title" required maxLength={140} defaultValue={initial.title} className="field font-heading text-2xl font-bold" placeholder="El día que papá se enteró" />
+          </div>
+          <div>
+            <label className="label" htmlFor="description">
+              ¿Qué pasó? (opcional)
+            </label>
+            <textarea id="description" name="description" rows={4} maxLength={4000} defaultValue={initial.description} className="field" placeholder="¿Quién estaba? ¿Qué sentimos?" />
+          </div>
+          <div className="max-w-xs">
+            <label className="label" htmlFor="date">
+              Fecha (opcional, sirve para ordenar)
+            </label>
+            <input id="date" name="date" type="date" defaultValue={initial.date} className="field" />
+          </div>
+        </div>
+      </Step>
+
+      <details className="group rounded-[1.8rem] border-2 border-tinta/10 bg-papel p-5 shadow-soft sm:p-6">
+        <summary className="cursor-pointer list-none font-heading text-xl font-extrabold">
+          <span className="inline-block transition group-open:rotate-90">›</span> Más opciones <span className="font-ui text-sm font-semibold text-tinta-mute">(estilo, edad, etiquetas)</span>
+        </summary>
+        <div className="mt-5 space-y-5">
+          <div>
+            <p className="label">Cómo se verá en la historia</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {PRESENTATIONS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPresentation(p)}
+                  aria-pressed={presentation === p}
+                  className="flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition"
+                  style={{ borderColor: presentation === p ? accent : "rgba(33,55,43,.1)", background: presentation === p ? `${accent}18` : undefined }}
+                >
+                  <StyleThumb id={p} />
+                  <span className="font-heading text-base font-bold leading-tight">{PRESENTATION_LABELS[p].name}</span>
+                  <span className="font-ui text-[11px] font-semibold leading-snug text-tinta-mute">{PRESENTATION_LABELS[p].hint}</span>
+                </button>
+              ))}
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="label" htmlFor="date">
-                  Fecha
-                </label>
-                <input id="date" name="date" type="date" defaultValue={initial.date} className="field" />
-              </div>
-              <div>
-                <label className="label" htmlFor="scene">
-                  Capítulo
-                </label>
-                <select id="scene" name="scene" value={scene} onChange={(e) => setScene(e.target.value as SceneId)} className="field">
-                  {SCENES.filter((s) => s !== "CARTAS").map((s) => (
-                    <option key={s} value={s}>
-                      {SCENE_META[s].title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="stageId">
-                  Etapa
-                </label>
-                <select id="stageId" name="stageId" defaultValue={initial.stageId} className="field">
-                  <option value="">Sin etapa</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="stageId">
+                Edad o etapa (opcional)
+              </label>
+              <select id="stageId" name="stageId" defaultValue={initial.stageId} className="field">
+                <option value="">Sin etapa</option>
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label" htmlFor="tags">
                 Etiquetas (separadas por comas)
               </label>
-              <input id="tags" name="tags" defaultValue={initial.tags} className="field" placeholder="baño, abuelos, risas" />
+              <input id="tags" name="tags" defaultValue={initial.tags} className="field" placeholder="abuelos, risas" />
             </div>
-          </div>
-        </Panel>
-
-        <Panel>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-heading text-2xl font-extrabold">Fotos y videos</h2>
-              <p className="font-ui text-sm font-semibold text-tinta-mute">Arrastra para ordenar. La estrella marca la foto principal.</p>
-            </div>
-            <button type="button" className="btn-soft" onClick={() => setPicker(true)}>
-              {selected.length ? "Agregar o quitar" : "Elegir fotos y videos"}
-            </button>
-          </div>
-          {selected.length === 0 ? (
-            <button type="button" onClick={() => setPicker(true)} className="w-full rounded-3xl border-[3px] border-dashed border-tinta/15 p-10 text-center font-heading text-lg font-bold text-tinta-mute hover:bg-crema">
-              Todavía no hay fotos en este recuerdo
-            </button>
-          ) : (
-            <Reorder.Group axis="y" values={mediaIds} onReorder={setMediaIds} className="space-y-2">
-              {selected.map((m) => (
-                <Reorder.Item key={m.id} value={m.id} className="flex cursor-grab items-center gap-3 rounded-2xl border-2 border-tinta/10 bg-white p-2 active:cursor-grabbing">
-                  <Media media={m} className="h-16 w-16 shrink-0 rounded-xl" sizes="80px" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-ui text-sm font-bold">{m.caption || m.originalName}</p>
-                    <p className="font-ui text-xs font-semibold text-tinta-mute">{m.kind === "VIDEO" ? "Video" : "Foto"}</p>
-                  </div>
-                  <button type="button" onClick={() => setCoverId(m.id)} aria-pressed={coverId === m.id} aria-label="Usar como foto principal" className={`grid h-10 w-10 place-items-center rounded-full text-xl ${coverId === m.id || (!coverId && mediaIds[0] === m.id) ? "bg-sol" : "bg-tinta/5"}`}>
-                    ★
-                  </button>
-                  <button type="button" onClick={() => setMediaIds((ids) => ids.filter((x) => x !== m.id))} className="rounded-full px-3 py-2 font-ui text-sm font-bold text-coral-600 hover:bg-coral-100">
-                    Quitar
-                  </button>
-                </Reorder.Item>
-              ))}
-            </Reorder.Group>
-          )}
-        </Panel>
-      </div>
-
-      <div className="space-y-6">
-        <Panel>
-          <h2 className="font-heading text-2xl font-extrabold">Cómo se verá</h2>
-          <p className="font-ui text-sm font-semibold text-tinta-mute">Cada recuerdo puede tener su propio estilo.</p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {PRESENTATIONS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPresentation(p)}
-                aria-pressed={presentation === p}
-                className="flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition"
-                style={{ borderColor: presentation === p ? accent : "rgba(33,55,43,.1)", background: presentation === p ? `${accent}18` : undefined }}
-              >
-                <StyleThumb id={p} />
-                <span className="font-heading text-base font-bold leading-tight">{PRESENTATION_LABELS[p].name}</span>
-                <span className="font-ui text-[11px] font-semibold leading-snug text-tinta-mute">{PRESENTATION_LABELS[p].hint}</span>
-              </button>
-            ))}
-          </div>
-        </Panel>
-        <Panel className="space-y-4">
-          <div className="grid grid-cols-2 gap-1 rounded-full bg-tinta/5 p-1" role="radiogroup" aria-label="Estado">
-            {(
-              [
-                ["DRAFT", "Borrador"],
-                ["PUBLISHED", "Publicado"],
-              ] as const
-            ).map(([v, l]) => (
-              <button key={v} type="button" role="radio" aria-checked={status === v} onClick={() => setStatus(v)} className={`rounded-full py-2 font-ui text-sm font-bold transition ${status === v ? "bg-papel shadow-soft" : "text-tinta-mute"}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-          <p className="font-ui text-xs font-semibold text-tinta-mute">{status === "DRAFT" ? "Sólo los editores lo verán en la vista previa." : "Toda la familia lo verá en la historia."}</p>
-          <FormMessage state={state} />
-          <div className="flex flex-wrap gap-2">
-            <SubmitButton>{status === "PUBLISHED" ? "Guardar y publicar" : "Guardar borrador"}</SubmitButton>
-            {initial.id && (
-              <Link href={`/historia?preview=1#recuerdo-${initial.id}`} target="_blank" className="btn-soft">
-                Vista previa
-              </Link>
-            )}
           </div>
           {initial.id && (
-            <motion.div layout className="border-t-2 border-tinta/5 pt-3">
+            <div className="border-t-2 border-tinta/5 pt-3">
               <ConfirmButton
                 onConfirm={async () => {
                   const r = await deleteMemory(initial.id!);
@@ -298,9 +382,35 @@ export function MemoryForm({ initial, library: lib, stages }: { initial: MemoryF
               >
                 Eliminar este recuerdo
               </ConfirmButton>
-            </motion.div>
+            </div>
           )}
-        </Panel>
+        </div>
+      </details>
+
+      <FormMessage state={{ ...state, message: undefined }} />
+
+      {/* barra fija para guardar */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-tinta/10 bg-papel/95 px-4 py-3 backdrop-blur lg:left-64">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3">
+          <div className="grid grid-cols-2 gap-1 rounded-full bg-tinta/5 p-1" role="radiogroup" aria-label="Estado">
+            {(
+              [
+                ["DRAFT", "Borrador"],
+                ["PUBLISHED", "Publicar"],
+              ] as const
+            ).map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={status === v} onClick={() => setStatus(v)} className={`rounded-full px-4 py-2 font-ui text-sm font-bold transition ${status === v ? "bg-papel shadow-soft" : "text-tinta-mute"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <SaveButton label={uploading ? "Esperando que terminen de subir…" : status === "PUBLISHED" ? "Guardar y publicar" : "Guardar borrador"} disabled={uploading} />
+          {initial.id && (
+            <Link href={`/historia?preview=1#recuerdo-${initial.id}`} target="_blank" className="font-ui text-sm font-bold text-turquesa underline decoration-2 underline-offset-4">
+              Vista previa
+            </Link>
+          )}
+        </div>
       </div>
 
       <MediaPicker

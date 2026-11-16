@@ -146,6 +146,7 @@
   .film-bars::before,
   .film-bars::after {
     content: "";
+    pointer-events: none;
     position: absolute;
     left: 0;
     right: 0;
@@ -181,4 +182,41 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ——— Ambiente de la historia ——— */
+@keyframes jq-fall {
+  0% { transform: translate3d(0, -5vh, 0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  50% { transform: translate3d(var(--sway, 40px), 52vh, 0) rotate(calc(var(--spin, 360deg) / 2)); }
+  92% { opacity: 1; }
+  100% { transform: translate3d(calc(var(--sway, 40px) * -0.6), 112vh, 0) rotate(var(--spin, 360deg)); opacity: 0; }
+}
+.jq-fall { animation: jq-fall 22s linear infinite; will-change: transform; }
+@keyframes jq-glow { 0%, 100% { opacity: 0; transform: scale(0.6); } 50% { opacity: 0.85; transform: scale(1.4); box-shadow: 0 0 12px 4px rgba(255, 201, 60, 0.6); } }
+.jq-glow { animation: jq-glow 4s ease-in-out infinite; }
+@keyframes jq-flap { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.25); } }
+.jq-flap { animation: jq-flap 0.28s ease-in-out infinite; }
+@keyframes jq-fly-a {
+  0% { transform: translate(-10vw, 70vh) rotate(10deg); }
+  25% { transform: translate(30vw, 40vh) rotate(-8deg); }
+  50% { transform: translate(60vw, 62vh) rotate(12deg); }
+  75% { transform: translate(85vw, 30vh) rotate(-6deg); }
+  100% { transform: translate(110vw, 50vh) rotate(8deg); }
+}
+@keyframes jq-fly-b {
+  0% { transform: translate(110vw, 25vh) rotate(-10deg) scaleX(-1); }
+  30% { transform: translate(70vw, 55vh) rotate(6deg) scaleX(-1); }
+  60% { transform: translate(35vw, 20vh) rotate(-8deg) scaleX(-1); }
+  100% { transform: translate(-12vw, 60vh) rotate(6deg) scaleX(-1); }
+}
+.jq-fly-a { animation: jq-fly-a 34s ease-in-out infinite; }
+.jq-fly-b { animation: jq-fly-b 41s ease-in-out infinite; animation-delay: -12s; }
+@keyframes jq-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+.jq-bob { animation: jq-bob 0.6s ease-in-out infinite; }
+@keyframes jq-grass { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-24px); } }
+.jq-grass { animation: jq-grass 6s ease-in-out infinite; }
+.jq-grass-2 { animation-duration: 8s; animation-direction: reverse; }
+@media (prefers-reduced-motion: reduce) {
+  .jq-fall, .jq-glow, .jq-fly-a, .jq-fly-b, .jq-bob, .jq-grass { animation: none !important; display: none; }
 }

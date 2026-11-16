@@ -6,9 +6,10 @@ import { loadLibrary, loadStages } from "@/lib/admin-data";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
-export default async function EditarRecuerdo({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarRecuerdo({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ guardado?: string }> }) {
   await requireUser("EDITOR");
   const { id } = await params;
+  const { guardado } = await searchParams;
   const [memory, library, stages] = await Promise.all([
     db.query.memories.findFirst({ where: eq(schema.memories.id, id), with: { media: { orderBy: [asc(schema.memoryMedia.order)] } } }),
     loadLibrary(),
@@ -16,10 +17,11 @@ export default async function EditarRecuerdo({ params }: { params: Promise<{ id:
   ]);
   if (!memory) notFound();
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-3xl">
       <PageTitle title="Editar recuerdo" kicker="Recuerdos" color="#FF8A7A" />
       <MemoryForm
-        key={memory.updatedAt.toISOString()}
+        key={memory.id}
+        justSaved={guardado === "1"}
         library={library}
         stages={stages}
         initial={{

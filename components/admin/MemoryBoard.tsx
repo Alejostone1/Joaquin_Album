@@ -3,7 +3,8 @@
 import { Reorder } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { reorderMemories, setMemoryStatus } from "@/app/admin/actions";
+import { reorderMemories, setMemoryStatus, sortMemoriesByDate } from "@/app/admin/actions";
+import { useRouter } from "next/navigation";
 import { Media } from "@/components/story/Media";
 import { PRESENTATION_LABELS, SCENE_META, SCENES, type PresentationId, type SceneId } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -25,6 +26,7 @@ export function MemoryBoard({ items }: { items: BoardItem[] }) {
   const [filter, setFilter] = useState<"ALL" | "DRAFT" | "PUBLISHED">("ALL");
   const [groups, setGroups] = useState<Record<string, BoardItem[]>>({});
   const toast = useToast();
+  const router = useRouter();
   const latest = useRef(groups);
   latest.current = groups;
   useEffect(() => {
@@ -61,9 +63,23 @@ export function MemoryBoard({ items }: { items: BoardItem[] }) {
               <h2 className="font-heading text-2xl font-extrabold" style={{ color: meta.accent }}>
                 {meta.title} <span className="font-ui text-sm text-tinta-mute">({list.length})</span>
               </h2>
-              <Link href={`/admin/recuerdos/nuevo?capitulo=${scene}`} className="font-ui text-sm font-bold underline decoration-2 underline-offset-4" style={{ color: meta.accent }}>
-                + Agregar aquí
-              </Link>
+              <div className="flex flex-wrap items-center gap-3">
+                {list.length > 1 && (
+                  <button
+                    onClick={async () => {
+                      const r = await sortMemoriesByDate(scene);
+                      toast(r.ok ? r.message ?? "Listo." : r.error ?? "Error", r.ok ? "ok" : "error");
+                      router.refresh();
+                    }}
+                    className="rounded-full bg-tinta/5 px-3 py-1.5 font-ui text-sm font-bold hover:bg-tinta/10"
+                  >
+                    Ordenar por fecha
+                  </button>
+                )}
+                <Link href={`/admin/recuerdos/nuevo?capitulo=${scene}`} className="font-ui text-sm font-bold underline decoration-2 underline-offset-4" style={{ color: meta.accent }}>
+                  + Agregar aquí
+                </Link>
+              </div>
             </div>
             {visible.length === 0 ? (
               <p className="rounded-3xl border-2 border-dashed border-tinta/10 p-5 font-ui text-sm font-bold text-tinta-mute">Sin recuerdos {filter === "DRAFT" ? "en borrador" : filter === "PUBLISHED" ? "publicados" : ""} en este capítulo.</p>
