@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { getCurrentUser, hasRole } from "@/lib/auth";
+import { getGuest } from "@/lib/guest";
 import { db, schema } from "@/lib/db";
 import { USE_BLOB, variantPath, verifyMediaSignature, type Variant } from "@/lib/storage";
 
@@ -24,7 +25,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!VARIANTS.has(variant)) return notFound();
 
   const user = await getCurrentUser();
-  if (!user) return new Response("Inicia sesión", { status: 401 });
+  if (!user && !(await getGuest())) return new Response("Inicia sesión", { status: 401 });
   if (!verifyMediaSignature(id, variant, url.searchParams.get("e"), url.searchParams.get("s"))) {
     return new Response("Enlace vencido", { status: 403 });
   }

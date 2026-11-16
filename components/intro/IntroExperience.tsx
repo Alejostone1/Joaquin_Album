@@ -305,7 +305,7 @@ function Credits({ playing }: { playing: boolean }) {
       setStep(-1);
       return;
     }
-    const times = [900, 4300, 7800, 11200];
+    const times = [800, 3500, 6200, 9200];
     const ids = times.map((t, i) => setTimeout(() => setStep(i), t));
     return () => ids.forEach(clearTimeout);
   }, [playing]);

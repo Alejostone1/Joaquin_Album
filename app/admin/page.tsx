@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
+import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { PageTitle, Panel, StatusBadge } from "@/components/admin/ui";
 import { StegoArt } from "@/components/ui/DinoArt";
 import { WatercolorBlob } from "@/components/ui/Watercolor";
@@ -13,7 +14,7 @@ export default async function AdminHome() {
   const current = await getCurrentUser();
   if (current && !hasRole(current, "EDITOR")) redirect("/admin/cuenta");
   const user = await requireUser("EDITOR");
-  const [published, drafts, photos, videos, moments, letters, people, recent] = await Promise.all([
+  const [published, drafts, photos, videos, moments, letters, people, recent, activity] = await Promise.all([
     db.$count(schema.memories, eq(schema.memories.status, "PUBLISHED")),
     db.$count(schema.memories, eq(schema.memories.status, "DRAFT")),
     db.$count(schema.media, eq(schema.media.kind, "IMAGE")),
@@ -21,7 +22,8 @@ export default async function AdminHome() {
     db.$count(schema.milestones),
     db.$count(schema.letters),
     db.$count(schema.users),
-    db.query.memories.findMany({ orderBy: [desc(schema.memories.updatedAt)], limit: 6 }),
+    db.query.memories.findMany({ orderBy: [desc(schema.memories.updatedAt)], limit: 6, with: { author: { columns: { name: true } }, chapter: { columns: { title: true } } } }),
+    db.select().from(schema.activity).orderBy(desc(schema.activity.createdAt)).limit(40),
   ]);
   const stats = [
     { n: published, label: "recuerdos publicados", color: "#FF8A7A", href: "/admin/recuerdos" },
@@ -68,7 +70,16 @@ export default async function AdminHome() {
         ))}
       </div>
 
-      <div className="mt-10">
+      <div className="mt-10 grid gap-10 lg:grid-cols-2">
+      <div>
+        <PageTitle title="Lo que hizo la familia" kicker="Historial" color="#E86A9A">
+          <Link href="/admin/historial" className="btn-soft py-2 text-sm">
+            Ver todo
+          </Link>
+        </PageTitle>
+        <ActivityFeed compact rows={activity.map((r) => ({ id: r.id, userName: r.userName, action: r.action, entity: r.entity, entityId: r.entityId, summary: r.summary, createdAt: r.createdAt.toISOString() }))} />
+      </div>
+      <div>
         <PageTitle title="Últimos cambios" kicker="Recuerdos" color="#FF8A7A" />
         <Panel className="divide-y-2 divide-tinta/5 p-0 sm:p-0">
           {recent.length === 0 && <p className="p-6 text-tinta-soft">Todavía no hay recuerdos. Empieza subiendo algunas fotos.</p>}
@@ -77,14 +88,16 @@ export default async function AdminHome() {
               <div>
                 <p className="font-heading text-lg font-bold">{m.title}</p>
                 <p className="font-ui text-xs font-bold text-tinta-mute">
-                  {SCENE_META[m.scene].title}
+                  {m.chapter?.title ?? SCENE_META[m.scene].title}
                   {m.date ? ` · ${formatDate(m.date)}` : ""}
+                  {m.author ? ` · por ${m.author.name}` : ""}
                 </p>
               </div>
               <StatusBadge status={m.status} />
             </Link>
           ))}
         </Panel>
+      </div>
       </div>
     </div>
   );

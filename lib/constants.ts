@@ -109,20 +109,30 @@ export const PRESENTATIONS = [
   "SEQUENCE",
   "REVEAL",
   "MASK",
+  "SCRAPBOOK",
+  "CAROUSEL",
+  "DECK",
+  "STORYBOOK",
+  "BUBBLES",
 ] as const;
 export type PresentationId = (typeof PRESENTATIONS)[number];
 
 export const PRESENTATION_LABELS: Record<PresentationId, { name: string; hint: string }> = {
-  AUTO: { name: "Automático", hint: "Elige un estilo según las fotos" },
-  CINEMATIC: { name: "Cine", hint: "Pantalla completa con franjas de película" },
-  PARALLAX: { name: "Parallax", hint: "Capas que se mueven a distinta velocidad" },
-  ZOOM: { name: "Zoom suave", hint: "La foto se acerca lentamente al bajar" },
-  EDITORIAL: { name: "Editorial", hint: "Composición de revista con texto grande" },
-  OVERLAP: { name: "Superpuestas", hint: "Fotos tipo polaroid que se abren en abanico" },
-  COLLAGE: { name: "Collage", hint: "Mosaico dinámico con varias fotos" },
-  SEQUENCE: { name: "Secuencia", hint: "Las fotos se suceden mientras bajas" },
-  REVEAL: { name: "Revelado", hint: "La foto aparece poco a poco" },
-  MASK: { name: "Máscara", hint: "Se descubre a través de una huella o un huevo" },
+  AUTO: { name: "Automático", hint: "Elige el mejor estilo según cuántas fotos y videos tenga" },
+  CINEMATIC: { name: "Película", hint: "Cada foto o video ocupa toda la pantalla, como escenas de cine" },
+  PARALLAX: { name: "Parallax", hint: "Foto y texto flotan en capas a distinta velocidad" },
+  ZOOM: { name: "Zoom suave", hint: "La foto crece hasta llenar la pantalla" },
+  EDITORIAL: { name: "Revista", hint: "Composición de revista con letra grande" },
+  OVERLAP: { name: "Abanico", hint: "Polaroids que se abren en abanico" },
+  COLLAGE: { name: "Collage", hint: "Mosaico animado con muchas fotos" },
+  SEQUENCE: { name: "Secuencia", hint: "Las fotos se cambian solas mientras bajas" },
+  REVEAL: { name: "Revelado", hint: "La foto aparece poco a poco, como en papel" },
+  MASK: { name: "Huevo mágico", hint: "La foto se descubre a través de un huevo" },
+  SCRAPBOOK: { name: "Álbum de recortes", hint: "Fotos pegadas con cinta, stickers y notas" },
+  CAROUSEL: { name: "Carrusel 3D", hint: "Un carrusel que gira; arrastra o usa las flechas" },
+  DECK: { name: "Baraja", hint: "Fotos apiladas que se deslizan a un lado, una por una" },
+  STORYBOOK: { name: "Libro de cuentos", hint: "Páginas que se pasan con el texto de cada foto" },
+  BUBBLES: { name: "Burbujas", hint: "Fotos redondas que flotan en el cielo" },
 };
 
 export const MILESTONE_TYPES = [

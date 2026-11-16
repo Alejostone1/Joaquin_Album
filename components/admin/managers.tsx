@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
   changeOwnPassword,
+  createInviteLink,
   createUser,
+  deleteChapter,
+  saveChapter,
   deleteLetter,
   deleteMilestone,
   deleteStage,
@@ -283,6 +286,7 @@ function StageForm({ row, onDone }: { row: StageRow | null; onDone: () => void }
       <form action={action} className="space-y-4">
         <h2 className="font-heading text-2xl font-extrabold">{row ? "Editar etapa" : "Nueva etapa"}</h2>
         {row && <input type="hidden" name="id" value={row.id} />}
+        {row && <input type="hidden" name="hasEnabled" value="1" />}
         <input type="hidden" name="color" value={color} />
         <div>
           <label className="label" htmlFor="s-name">
@@ -539,17 +543,136 @@ function SceneCard({ row }: { row: SceneRow }) {
   );
 }
 
+// ——— Capítulos de la familia ———
+type CustomRow = { id: string; title: string; subtitle: string | null; phrase: string | null; color: string; companion: string; afterScene: SceneId; enabled: boolean; count: number };
+const CH_COLORS = ["#9B7BE0", "#2BA36B", "#FF8A7A", "#1FB5B0", "#F2A516", "#E86A9A", "#3C9BE0", "#FF9F68", "#7FB86F"];
+const DINOS = [
+  ["stego", "Estegosaurio"],
+  ["trice", "Triceratops"],
+  ["ptero", "Pterodáctilo"],
+  ["baby", "Huevito"],
+] as const;
+
+export function CustomChapterManager({ rows }: { rows: CustomRow[] }) {
+  const [adding, setAdding] = useState(rows.length === 0);
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        {rows.map((r) => (
+          <CustomChapterCard key={r.id} row={r} />
+        ))}
+        {adding ? (
+          <CustomChapterCard onDone={() => setAdding(false)} />
+        ) : (
+          <button onClick={() => setAdding(true)} className="grid min-h-[12rem] place-items-center rounded-[1.8rem] border-[3px] border-dashed border-tinta/20 font-heading text-2xl font-extrabold text-tinta-soft transition hover:border-tinta/40 hover:bg-white">
+            + Crear un capítulo nuevo
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomChapterCard({ row, onDone }: { row?: CustomRow; onDone?: () => void }) {
+  const [state, action] = useActionState<ActionResult, FormData>(saveChapter, { ok: false });
+  const toast = useToast();
+  const router = useRouter();
+  const [color, setColor] = useState(row?.color ?? CH_COLORS[0]);
+  const formRef = useRef<HTMLFormElement>(null);
+  useOnResult(state, (s) => {
+    if (!s.ok) return;
+    toast(s.message ?? "Guardado.");
+    if (!row) {
+      formRef.current?.reset();
+      onDone?.();
+    }
+    router.refresh();
+  });
+  return (
+    <Panel>
+      <form ref={formRef} action={action} className="space-y-3" style={{ borderColor: color }}>
+        {row && <input type="hidden" name="id" value={row.id} />}
+        {row && <input type="hidden" name="hasEnabled" value="1" />}
+        <input type="hidden" name="color" value={color} />
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-ui text-xs font-bold uppercase tracking-widest" style={{ color }}>
+            {row ? `Capítulo de la familia · ${row.count} ${row.count === 1 ? "recuerdo" : "recuerdos"}` : "Nuevo capítulo"}
+          </p>
+          {row && (
+            <label className="flex cursor-pointer items-center gap-2 font-ui text-sm font-bold">
+              <input type="checkbox" name="enabled" defaultChecked={row.enabled} className="h-5 w-5 accent-esmeralda" />
+              Visible
+            </label>
+          )}
+        </div>
+        <input name="title" defaultValue={row?.title} className="field font-heading text-xl font-bold" aria-label="Título" placeholder="Ej.: Mi primera Navidad" required />
+        <input name="subtitle" defaultValue={row?.subtitle ?? ""} className="field" aria-label="Etiqueta" placeholder="Etiqueta (ej.: Diciembre 2026)" />
+        <textarea name="phrase" defaultValue={row?.phrase ?? ""} rows={2} className="field" aria-label="Frase" placeholder="Una frase bonita para abrir el capítulo" />
+        <div className="flex flex-wrap gap-2">
+          {CH_COLORS.map((c) => (
+            <button key={c} type="button" onClick={() => setColor(c)} aria-label={`Color ${c}`} aria-pressed={color === c} className={`h-9 w-9 rounded-full border-[3px] transition ${color === c ? "scale-110 border-tinta" : "border-white"}`} style={{ background: c }} />
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="font-ui text-sm font-bold">
+            Aparece después de
+            <select name="afterScene" defaultValue={row?.afterScene ?? "AVENTURAS"} className="field mt-1">
+              {(Object.keys(SCENE_META) as SceneId[]).map((s) => (
+                <option key={s} value={s}>
+                  {SCENE_META[s].title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="font-ui text-sm font-bold">
+            Dinosaurio que lo acompaña
+            <select name="companion" defaultValue={row?.companion ?? "stego"} className="field mt-1">
+              {DINOS.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <FormMessage state={{ ...state, message: undefined }} />
+        <div className="flex flex-wrap items-center gap-2">
+          <SubmitButton className="btn-soft">{row ? "Guardar" : "Crear capítulo"}</SubmitButton>
+          {row && (
+            <ConfirmButton
+              onConfirm={async () => {
+                const r = await deleteChapter(row.id);
+                toast(r.ok ? "Capítulo eliminado. Sus recuerdos siguen guardados." : r.error ?? "Error", r.ok ? "ok" : "error");
+                router.refresh();
+              }}
+            >
+              Eliminar
+            </ConfirmButton>
+          )}
+          {!row && onDone && (
+            <button type="button" className="font-ui text-sm font-bold text-tinta-mute" onClick={onDone}>
+              Cancelar
+            </button>
+          )}
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
 // ——— Personas ———
-type UserRow = { id: string; name: string; email: string; role: RoleId; relation: string | null; active: boolean; lastLoginAt: string | null };
+type UserRow = { id: string; name: string; email: string; role: RoleId; relation: string | null; active: boolean; lastLoginAt: string | null; pending: boolean; inviteActive: boolean };
 
 export function UserManager({ rows, meId }: { rows: UserRow[]; meId: string }) {
   const [state, action] = useActionState<ActionResult, FormData>(createUser, { ok: false });
   const toast = useToast();
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const [newLink, setNewLink] = useState<string | null>(null);
   useOnResult(state, (s) => {
     if (s.ok) {
-      toast(s.message ?? "Listo.");
+      if (s.message?.startsWith("http")) setNewLink(s.message);
+      else toast(s.message ?? "Listo.");
       formRef.current?.reset();
       router.refresh();
     }
@@ -574,11 +697,51 @@ export function UserManager({ rows, meId }: { rows: UserRow[]; meId: string }) {
               </option>
             ))}
           </select>
-          <input name="password" type="text" minLength={8} required className="field" placeholder="Clave inicial (mín. 8)" aria-label="Clave inicial" autoComplete="off" />
-          <FormMessage state={state} />
+          <p className="font-ui text-xs font-semibold text-tinta-mute">Al crear el acceso te damos un enlace de invitación: la persona lo abre y elige su propia clave.</p>
+          <FormMessage state={{ ...state, message: state.message?.startsWith("http") ? undefined : state.message }} />
           <SubmitButton>Crear acceso</SubmitButton>
+          {newLink && <InviteLinkBox link={newLink} />}
         </form>
       </Panel>
+    </div>
+  );
+}
+
+export function InviteLinkBox({ link, label = "Enlace de invitación (vale 14 días, se usa una sola vez)" }: { link: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    try {
+      if (navigator.share) await navigator.share({ title: "Álbum de Joaquín", text: "Entra al álbum de Joaquín con este enlace:", url: link });
+      else {
+        await navigator.clipboard.writeText(link);
+        setCopied(true);
+      }
+    } catch {
+      /* cancelado */
+    }
+  };
+  return (
+    <div className="mt-3 rounded-2xl border-2 border-esmeralda bg-esmeralda-100 p-3">
+      <p className="font-ui text-xs font-bold text-tinta-soft">{label}</p>
+      <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="field mt-1 py-2 font-mono text-xs" aria-label="Enlace" />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="btn-soft py-2 text-sm"
+          onClick={async () => {
+            await navigator.clipboard.writeText(link);
+            setCopied(true);
+          }}
+        >
+          {copied ? "¡Copiado!" : "Copiar"}
+        </button>
+        <button type="button" className="btn-soft py-2 text-sm" onClick={share}>
+          Compartir…
+        </button>
+        <a className="btn-soft py-2 text-sm" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(`Entra al álbum de Joaquín: ${link}`)}`}>
+          WhatsApp
+        </a>
+      </div>
     </div>
   );
 }
@@ -588,6 +751,7 @@ function UserCard({ u, me }: { u: UserRow; me: boolean }) {
   const router = useRouter();
   const [pwd, setPwd] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
   const run = async (p: Promise<ActionResult>, ok: string) => {
     const r = await p;
     toast(r.ok ? r.message ?? ok : r.error ?? "Error", r.ok ? "ok" : "error");
@@ -598,7 +762,8 @@ function UserCard({ u, me }: { u: UserRow; me: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-heading text-xl font-bold">
-            {u.name} {me && <span className="chip bg-menta">Tú</span>} {!u.active && <span className="chip bg-coral-100">Desactivado</span>}
+            {u.name} {me && <span className="chip bg-menta">Tú</span>} {!u.active && <span className="chip bg-coral-100">Desactivado</span>}{" "}
+            {u.pending && <span className="chip bg-sol-100">Falta aceptar la invitación</span>}
           </p>
           <p className="font-ui text-sm font-semibold text-tinta-mute">
             {u.email}
@@ -631,9 +796,20 @@ function UserCard({ u, me }: { u: UserRow; me: boolean }) {
               Cambiar clave
             </button>
           )}
+          <button
+            className="rounded-full bg-esmeralda-100 px-4 py-2 font-ui text-sm font-bold text-tinta"
+            onClick={async () => {
+              const r = await createInviteLink(u.id);
+              if (r.ok && r.message) setLink(r.message);
+              else toast(r.error ?? "No se pudo crear el enlace.", "error");
+            }}
+          >
+            {u.pending ? "Enlace de invitación" : "Enlace para nueva clave"}
+          </button>
           <ConfirmButton onConfirm={() => run(deleteUser(u.id), "Persona eliminada.")}>Eliminar</ConfirmButton>
         </div>
       )}
+      {link && <InviteLinkBox link={link} label={u.pending ? `Envíale este enlace a ${u.name} (vale 14 días)` : `Con este enlace ${u.name} elige una clave nueva (vale 14 días)`} />}
     </Panel>
   );
 }

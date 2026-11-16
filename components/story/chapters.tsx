@@ -7,9 +7,9 @@ import { useAudio } from "@/components/audio/AudioProvider";
 import { BubbleWord } from "@/components/ui/BubbleWord";
 import { PteroArt, StegoArt, TriceArt } from "@/components/ui/DinoArt";
 import { EggIcon, FernLeaf, Footprint, WatercolorBlob } from "@/components/ui/Watercolor";
-import { MILESTONE_LABELS, type MilestoneTypeId, type SceneMeta } from "@/lib/constants";
+import { MILESTONE_LABELS, type MilestoneTypeId } from "@/lib/constants";
 import { addYears, formatDate, formatTime, monthYear } from "@/lib/format";
-import type { BirthDTO, LetterDTO, MediaDTO, MemoryDTO, MilestoneDTO, SceneDTO, ViewerDTO } from "@/lib/types";
+import type { BirthDTO, LetterDTO, MediaDTO, MemoryDTO, MilestoneDTO, ViewerDTO } from "@/lib/types";
 import { createLetter, type LetterFormState } from "@/app/historia/actions";
 import { MilestoneIcon } from "./icons";
 import { Media } from "./Media";
@@ -17,16 +17,33 @@ import { MemoryView } from "./presentations";
 import { gsap, useScrollFx } from "./useScrollFx";
 
 // ——— Apertura de capítulo ———
-export function ChapterOpener({ scene, meta, number }: { scene: SceneDTO; meta: SceneMeta; number: number }) {
+type OpenerChapter = { title: string; subtitle: string | null; phrase: string | null; accent: string; companion: string };
+export function ChapterOpener({ chapter, number }: { chapter: OpenerChapter; number: number }) {
+  const scene = chapter;
+  const meta = chapter;
   const words = scene.title.split(" ");
   const Art = meta.companion === "trice" ? TriceArt : meta.companion === "ptero" ? PteroArt : meta.companion === "baby" ? null : StegoArt;
+  const ref = useRef<HTMLElement>(null);
+  // parallax cinematográfico: cada capa se mueve a su propia velocidad y el título se aleja al salir
+  useScrollFx(ref, (el) => {
+    const st = { trigger: el, start: "top bottom", end: "bottom top", scrub: true };
+    gsap.fromTo(el.querySelector(".op-blob-a"), { yPercent: 35 }, { yPercent: -45, ease: "none", scrollTrigger: st });
+    gsap.fromTo(el.querySelector(".op-blob-b"), { yPercent: -20, xPercent: 10 }, { yPercent: 40, xPercent: -10, ease: "none", scrollTrigger: st });
+    gsap.fromTo(el.querySelectorAll(".op-fern"), { yPercent: 25 }, { yPercent: -10, ease: "none", scrollTrigger: st });
+    gsap.fromTo(el.querySelector(".op-num"), { yPercent: 40 }, { yPercent: -80, ease: "none", scrollTrigger: st });
+    gsap.to(el.querySelector(".op-text"), { yPercent: -18, scale: 0.94, opacity: 0.15, ease: "none", scrollTrigger: { trigger: el, start: "center center", end: "bottom top", scrub: true } });
+  });
   return (
-    <header className="relative flex min-h-[86svh] items-center overflow-hidden px-5 py-28">
-      <WatercolorBlob color={meta.accent} seed={number * 5 + 1} className="absolute -left-24 top-10 h-[60vh] w-[60vh]" opacity={0.22} />
-      <WatercolorBlob color="#FFE89A" seed={number * 7 + 2} className="absolute -right-16 bottom-0 h-[44vh] w-[44vh]" opacity={0.35} />
-      <FernLeaf className="absolute bottom-0 left-[6%] h-52 w-24 -rotate-12 opacity-60" color={meta.accent} />
-      <FernLeaf className="absolute bottom-0 right-[10%] h-64 w-28 rotate-12 opacity-40" color="#2F5D47" />
-      <div className="relative mx-auto w-full max-w-6xl">
+    <header ref={ref} className="relative flex min-h-[86svh] items-center overflow-hidden px-5 py-28">
+      <WatercolorBlob color={meta.accent} seed={number * 5 + 1} className="op-blob-a absolute -left-24 top-10 h-[60vh] w-[60vh]" opacity={0.22} />
+      <WatercolorBlob color="#FFE89A" seed={number * 7 + 2} className="op-blob-b absolute -right-16 bottom-0 h-[44vh] w-[44vh]" opacity={0.35} />
+      {/* número gigante del capítulo, de fondo */}
+      <span className="op-num pointer-events-none absolute -right-4 top-[8%] select-none font-display text-[clamp(10rem,38vw,30rem)] font-semibold leading-none opacity-[0.07]" style={{ color: meta.accent }} aria-hidden>
+        {number}
+      </span>
+      <FernLeaf className="op-fern absolute bottom-0 left-[6%] h-52 w-24 -rotate-12 opacity-60" color={meta.accent} />
+      <FernLeaf className="op-fern absolute bottom-0 right-[10%] h-64 w-28 rotate-12 opacity-40" color="#2F5D47" />
+      <div className="op-text relative mx-auto w-full max-w-6xl will-change-transform">
         <motion.p
           initial={{ opacity: 0, x: -20 }}
           whileInView={{ opacity: 1, x: 0 }}
@@ -87,14 +104,14 @@ export function ChapterOpener({ scene, meta, number }: { scene: SceneDTO; meta: 
   );
 }
 
-export function EmptyChapter({ canEdit, accent, label }: { canEdit: boolean; accent: string; label: string }) {
+export function EmptyChapter({ canEdit, accent, label, target }: { canEdit: boolean; accent: string; label: string; target?: string }) {
   return (
     <div className="mx-auto flex max-w-xl flex-col items-center px-6 pb-24 text-center">
       <StegoArt className="w-56 opacity-90" />
       <p className="mt-4 font-heading text-2xl font-bold">Este capítulo todavía se está escribiendo.</p>
       <p className="mt-2 text-tinta-soft">{canEdit ? `Agrega el primer recuerdo de “${label}” desde el administrador.` : "Muy pronto habrá recuerdos aquí."}</p>
       {canEdit && (
-        <Link href="/admin/recuerdos/nuevo" className="btn-soft mt-5" style={{ boxShadow: `0 4px 0 ${accent}` }}>
+        <Link href={`/admin/recuerdos/nuevo${target ? `?capitulo=${encodeURIComponent(target)}` : ""}`} className="btn-soft mt-5" style={{ boxShadow: `0 4px 0 ${accent}` }}>
           Crear un recuerdo
         </Link>
       )}

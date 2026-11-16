@@ -20,6 +20,8 @@ export type BoardItem = {
   presentation: PresentationId;
   cover: MediaDTO | null;
   count: number;
+  chapter: { title: string; color: string } | null;
+  author: string | null;
 };
 
 export function MemoryBoard({ items }: { items: BoardItem[] }) {
@@ -109,6 +111,12 @@ export function MemoryBoard({ items }: { items: BoardItem[] }) {
                       <p className="truncate font-ui text-xs font-bold text-tinta-mute">
                         {m.date ? `${formatDate(m.date)} · ` : ""}
                         {m.count} {m.count === 1 ? "archivo" : "archivos"} · {PRESENTATION_LABELS[m.presentation].name}
+                        {m.author ? ` · por ${m.author}` : ""}
+                        {m.chapter && (
+                          <span className="ml-1 rounded-full px-2 py-0.5 text-[11px] text-tinta" style={{ background: `${m.chapter.color}33` }}>
+                            en «{m.chapter.title}»
+                          </span>
+                        )}
                       </p>
                     </Link>
                     <button

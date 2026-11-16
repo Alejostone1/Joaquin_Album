@@ -18,3 +18,22 @@ export async function loadLibrary(): Promise<LibraryItem[]> {
 export async function loadStages() {
   return db.select().from(schema.stages).orderBy(asc(schema.stages.order));
 }
+
+export type ChapterOption = { target: string; title: string; kicker: string; accent: string; wash: string; custom: boolean };
+
+/** Capítulos donde se puede poner un recuerdo (los de la historia, salvo Cartas, y los creados por la familia). */
+export async function loadChapterOptions(): Promise<ChapterOption[]> {
+  const { SCENES, SCENE_META } = await import("@/lib/constants");
+  const [configs, custom] = await Promise.all([db.select().from(schema.sceneConfigs), db.select().from(schema.chapters).orderBy(asc(schema.chapters.order), asc(schema.chapters.createdAt))]);
+  const out: ChapterOption[] = [];
+  for (const s of SCENES) {
+    if (s !== "CARTAS") {
+      const c = configs.find((r) => r.scene === s);
+      out.push({ target: s, title: c?.title ?? SCENE_META[s].title, kicker: c?.subtitle ?? SCENE_META[s].chapter, accent: SCENE_META[s].accent, wash: SCENE_META[s].wash, custom: false });
+    }
+    for (const c of custom.filter((x) => x.afterScene === s)) {
+      out.push({ target: `c:${c.id}`, title: c.title, kicker: c.subtitle ?? "Capítulo de la familia", accent: c.color, wash: `${c.color}1c`, custom: true });
+    }
+  }
+  return out;
+}

@@ -10,7 +10,7 @@ export default async function UsuariosPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageTitle title="Personas con acceso" kicker="Sólo administradores" color="#9B7BE0" />
-      <UserManager meId={me.id} rows={rows.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, relation: u.relation, active: u.active, lastLoginAt: u.lastLoginAt?.toISOString() ?? null }))} />
+      <UserManager meId={me.id} rows={rows.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, relation: u.relation, active: u.active, lastLoginAt: u.lastLoginAt?.toISOString() ?? null, pending: !u.passwordHash, inviteActive: !!u.inviteExpiresAt && u.inviteExpiresAt > new Date() }))} />
     </div>
   );
 }

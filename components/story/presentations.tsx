@@ -1,101 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { formatDate } from "@/lib/format";
 import type { MemoryDTO } from "@/lib/types";
 import { WatercolorBlob } from "@/components/ui/Watercolor";
 import { Media } from "./Media";
 import { gsap, ScrollTrigger, useScrollFx } from "./useScrollFx";
 
-type P = { memory: MemoryDTO; accent: string; index: number };
-
-function Meta({ memory, accent, light = false }: { memory: MemoryDTO; accent: string; light?: boolean }) {
-  return (
-    <div className={`flex flex-wrap items-center gap-2 font-ui text-xs font-bold ${light ? "text-papel/90" : "text-tinta-soft"}`}>
-      {memory.status === "DRAFT" && <span className="chip bg-sol text-tinta">Borrador · sólo editores</span>}
-      {memory.date && (
-        <span className="chip" style={{ background: light ? "rgba(255,252,245,.18)" : `${accent}22`, color: light ? undefined : accent }}>
-          {formatDate(memory.date)}
-        </span>
-      )}
-      {memory.stage && (
-        <span className="chip" style={{ background: `${memory.stage.color}33` }}>
-          {memory.stage.name}
-        </span>
-      )}
-      {memory.tags.map((t) => (
-        <span key={t} className={`chip ${light ? "bg-white/15" : "bg-tinta/5"}`}>
-          #{t}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function Title({ children, className = "", accent }: { children: string; className?: string; accent?: string }) {
-  // la primera palabra lleva el color del capítulo; las palabras suben una a una
-  const words = children.split(" ");
-  return (
-    <motion.h3
-      className={`font-heading font-extrabold leading-[0.95] ${className}`}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.5 }}
-      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-    >
-      {words.map((w, i) => (
-        <span key={i} className={`inline-block overflow-hidden pb-[0.06em] align-bottom ${i < words.length - 1 ? "mr-[0.24em]" : ""}`}>
-          <motion.span
-            className="inline-block"
-            style={i === 0 && accent ? { color: accent } : undefined}
-            variants={{ hidden: { y: "110%", rotate: 4 }, show: { y: "0%", rotate: 0, transition: { type: "spring", stiffness: 170, damping: 18 } } }}
-          >
-            {w}
-          </motion.span>
-        </span>
-      ))}
-    </motion.h3>
-  );
-}
-
-/** Inclinación 3D suave que sigue al cursor */
-export function Tilt({ children, className = "", max = 7 }: { children: React.ReactNode; className?: string; max?: number }) {
-  const rx = useMotionValue(0);
-  const ry = useMotionValue(0);
-  const srx = useSpring(rx, { stiffness: 180, damping: 18 });
-  const sry = useSpring(ry, { stiffness: 180, damping: 18 });
-  return (
-    <motion.div
-      className={className}
-      style={{ rotateX: srx, rotateY: sry, transformPerspective: 900 }}
-      onPointerMove={(e) => {
-        if (e.pointerType !== "mouse") return;
-        const r = e.currentTarget.getBoundingClientRect();
-        ry.set(((e.clientX - r.left) / r.width - 0.5) * 2 * max);
-        rx.set(-((e.clientY - r.top) / r.height - 0.5) * 2 * max);
-      }}
-      onPointerLeave={() => {
-        rx.set(0);
-        ry.set(0);
-      }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function NoMedia({ memory, accent }: { memory: MemoryDTO; accent: string }) {
-  return (
-    <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-      <Meta memory={memory} accent={accent} />
-      <Title className="mt-3 text-4xl sm:text-5xl" accent={accent}>
-        {memory.title}
-      </Title>
-      {memory.description && <p className="mt-4 text-lg leading-relaxed text-tinta-soft">{memory.description}</p>}
-    </div>
-  );
-}
+import { Meta, NoMedia, Tilt, Title, type P } from "./parts";
+import { Bubbles, Carousel3D, Deck, NavArrows, Scrapbook, Storybook, useSideNav } from "./presentations2";
 
 // 1 ——— Cine: una película con todas las fotos y videos (una toma por pantalla)
 export function Cinematic({ memory, accent }: P) {
@@ -115,6 +28,18 @@ export function Cinematic({ memory, accent }: P) {
     },
     [shots.length],
   );
+  // pasar de una toma a otra hacia los lados: lleva el scroll a la posición de esa toma
+  const goShot = (i: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const k = Math.max(0, Math.min(shots.length - 1, i));
+    const top = el.getBoundingClientRect().top + window.scrollY;
+    const span = el.offsetHeight - window.innerHeight;
+    window.scrollTo({ top: top + ((k + 0.5) / shots.length) * span, behavior: "smooth" });
+  };
+  const activeRef = useRef(0);
+  activeRef.current = active;
+  useSideNav(ref, () => goShot(activeRef.current - 1), () => goShot(activeRef.current + 1));
   if (!shots.length) return <NoMedia memory={memory} accent={accent} />;
   const current = shots[active];
   return (
@@ -164,8 +89,11 @@ export function Cinematic({ memory, accent }: P) {
                 <span key={m.id} className="h-1.5 rounded-full transition-all duration-500" style={{ width: i === active ? 28 : 8, background: i <= active ? accent : "rgba(255,252,245,.35)" }} />
               ))}
             </div>
-            {active < shots.length - 1 && <p className="mt-2 font-ui text-xs font-bold opacity-70">sigue bajando ↓</p>}
+            {active < shots.length - 1 && <p className="mt-2 font-ui text-xs font-bold opacity-70">baja o desliza →</p>}
           </div>
+        )}
+        {shots.length > 1 && (
+          <NavArrows light className="absolute bottom-[3.2vh] right-5 z-[4] sm:bottom-[13vh] sm:right-8" onPrev={() => goShot(active - 1)} onNext={() => goShot(active + 1)} />
         )}
       </div>
     </section>
@@ -481,6 +409,11 @@ const SHOWN: Record<MemoryDTO["presentation"], number> = {
   SEQUENCE: 8,
   REVEAL: 1,
   MASK: 1,
+  SCRAPBOOK: 12,
+  CAROUSEL: 999,
+  DECK: 999,
+  STORYBOOK: 999,
+  BUBBLES: 9,
 };
 
 function Presentation(props: P) {
@@ -503,6 +436,16 @@ function Presentation(props: P) {
       return <Reveal {...props} />;
     case "MASK":
       return <Mask {...props} />;
+    case "SCRAPBOOK":
+      return <Scrapbook {...props} />;
+    case "CAROUSEL":
+      return <Carousel3D {...props} />;
+    case "DECK":
+      return <Deck {...props} />;
+    case "STORYBOOK":
+      return <Storybook {...props} />;
+    case "BUBBLES":
+      return <Bubbles {...props} />;
   }
 }
 
@@ -548,30 +491,7 @@ export function MediaReel({ items, memory, accent }: { items: MemoryDTO["media"]
 
   const ratio = (m: MemoryDTO["media"][number]) => (m.width && m.height ? m.width / m.height : m.kind === "VIDEO" ? 9 / 16 : 4 / 5);
 
-  if (!pinned) {
-    return (
-      <section ref={ref} className="mx-auto max-w-5xl px-5 pb-24">
-        <p className="mb-5 text-center font-ui text-xs font-bold uppercase tracking-[0.25em]" style={{ color: accent }}>
-          Más de «{memory.title}» · {items.length} {items.length === 1 ? "archivo" : "archivos"}
-        </p>
-        <div className={`grid gap-5 ${items.length === 1 ? "mx-auto max-w-md" : "sm:grid-cols-2"}`}>
-          {items.map((m, i) => (
-            <motion.div
-              key={m.id}
-              initial={{ opacity: 0, y: 60, rotate: i % 2 ? 5 : -5, clipPath: "inset(18% 18% 18% 18% round 28px)" }}
-              whileInView={{ opacity: 1, y: 0, rotate: i % 2 ? 1.5 : -1.5, clipPath: "inset(0% 0% 0% 0% round 28px)" }}
-              viewport={{ once: true, margin: "-12%" }}
-              transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1] }}
-              className="rounded-[1.8rem] bg-papel p-2.5 shadow-lift"
-            >
-              <Media media={m} gallery={memory.media} galleryTitle={memory.title} className="w-full rounded-[1.4rem]" style={{ aspectRatio: Math.min(1.6, Math.max(0.65, ratio(m))) }} sizes="(min-width: 640px) 45vw, 92vw" />
-              {m.caption && <p className="px-2 pb-1 pt-2 text-center font-heading font-bold text-tinta-soft">{m.caption}</p>}
-            </motion.div>
-          ))}
-        </div>
-      </section>
-    );
-  }
+  if (!pinned) return <SwipeReel items={items} memory={memory} accent={accent} ratio={ratio} />;
 
   return (
     <section ref={ref} className="relative">
@@ -610,6 +530,60 @@ export function MediaReel({ items, memory, accent }: { items: MemoryDTO["media"]
           ))}
         </div>
       </div>
+    </section>
+  );
+}
+
+/** Celular o pocos archivos: carrusel que se desliza hacia los lados, con puntos y flechas. */
+function SwipeReel({ items, memory, accent, ratio }: { items: MemoryDTO["media"]; memory: MemoryDTO; accent: string; ratio: (m: MemoryDTO["media"][number]) => number }) {
+  const track = useRef<HTMLDivElement>(null);
+  const [cur, setCur] = useState(0);
+  const onScroll = () => {
+    const t = track.current;
+    if (!t) return;
+    const cards = Array.from(t.children) as HTMLElement[];
+    const center = t.scrollLeft + t.clientWidth / 2;
+    let best = 0;
+    cards.forEach((c, i) => {
+      if (Math.abs(c.offsetLeft + c.offsetWidth / 2 - center) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - center)) best = i;
+    });
+    setCur(best);
+  };
+  const go = (i: number) => {
+    const t = track.current;
+    const c = t?.children[Math.max(0, Math.min(items.length - 1, i))] as HTMLElement | undefined;
+    if (t && c) t.scrollTo({ left: c.offsetLeft - (t.clientWidth - c.offsetWidth) / 2, behavior: "smooth" });
+  };
+  return (
+    <section className="pb-20">
+      <div className="mx-auto flex max-w-5xl items-end justify-between gap-3 px-5">
+        <p className="font-ui text-xs font-bold uppercase tracking-[0.2em]" style={{ color: accent }}>
+          Más de «{memory.title}» · {items.length} {items.length === 1 ? "archivo" : "archivos"}
+        </p>
+        {items.length > 1 && <NavArrows onPrev={() => go(cur - 1)} onNext={() => go(cur + 1)} />}
+      </div>
+      <div ref={track} onScroll={onScroll} className="no-scrollbar mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-[8vw] pb-6 pt-2 sm:px-[max(1.25rem,calc(50vw-28rem))]">
+        {items.map((m, i) => (
+          <motion.div
+            key={m.id}
+            initial={{ opacity: 0, y: 50, rotate: i % 2 ? 6 : -6 }}
+            whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ type: "spring", stiffness: 140, damping: 16, delay: Math.min(i, 3) * 0.06 }}
+            className="relative w-[84vw] shrink-0 snap-center rounded-[1.6rem] bg-papel p-2 shadow-lift sm:w-[min(26rem,60vw)]"
+          >
+            <Media media={m} gallery={memory.media} galleryTitle={memory.title} className="w-full rounded-[1.2rem]" style={{ aspectRatio: Math.min(1.5, Math.max(0.7, ratio(m))) }} sizes="(min-width: 640px) 26rem, 84vw" />
+            {m.caption && <p className="truncate px-2 pb-1 pt-2 text-center font-heading font-bold text-tinta-soft">{m.caption}</p>}
+          </motion.div>
+        ))}
+      </div>
+      {items.length > 1 && (
+        <div className="flex justify-center gap-1.5" aria-hidden>
+          {items.map((m, i) => (
+            <span key={m.id} className="h-2 rounded-full transition-all duration-300" style={{ width: i === cur ? 24 : 8, background: i === cur ? accent : "#21372B33" }} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

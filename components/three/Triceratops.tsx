@@ -12,7 +12,7 @@ const C = COLORS.trice;
  * Triceratops bebé — verde suave, volumen redondeado, gola festoneada
  * y tres cuernitos color crema. Expresión tierna.
  */
-export function Triceratops({ action = "idle", look = "pointer", celebrateKey, onPoke, shadows = true, groupRef, ...props }: DinoProps) {
+export function Triceratops({ action = "idle", look = "pointer", celebrateKey, onPoke, shadows = true, groupRef, flower = false, ...props }: DinoProps & { flower?: boolean }) {
   const root = useRef<THREE.Group>(null!);
   const body = useRef<THREE.Group>(null!);
   const head = useRef<THREE.Group>(null!);
@@ -122,6 +122,7 @@ export function Triceratops({ action = "idle", look = "pointer", celebrateKey, o
             <Cheek size={0.08} position={[0.22, -0.07, 0.22]} rotation={[0, 0.75, 0]} />
             <Smile radius={0.065} position={[0, -0.1, 0.425]} arc={Math.PI * 0.8} />
             <Zzz active={action === "sleep"} position={[0.25, 0.35, 0]} />
+            {flower && <Flower position={[0.2, 0.3, -0.02]} rotation={[0.3, 0, -0.4]} />}
           </group>
 
           <group ref={tail} position={[0, 0.55, -0.62]}>
@@ -142,6 +143,26 @@ export function Triceratops({ action = "idle", look = "pointer", celebrateKey, o
           </group>
         ))}
       </group>
+    </group>
+  );
+}
+
+/** Florecita rosada en la gola (Mamá). */
+function Flower(props: { position: [number, number, number]; rotation: [number, number, number] }) {
+  const mats = useMemo(() => ({ petal: skin("#FF8FB1", { rough: 0.5 }), center: skin("#FFD23F", { rough: 0.5 }) }), []);
+  return (
+    <group {...props}>
+      {[0, 1, 2, 3, 4].map((i) => {
+        const a = (i / 5) * Math.PI * 2;
+        return (
+          <mesh key={i} material={mats.petal} position={[Math.cos(a) * 0.065, Math.sin(a) * 0.065, 0]} scale={[1, 1, 0.45]}>
+            <sphereGeometry args={[0.05, 14, 10]} />
+          </mesh>
+        );
+      })}
+      <mesh material={mats.center} position={[0, 0, 0.02]} scale={[1, 1, 0.6]}>
+        <sphereGeometry args={[0.04, 14, 10]} />
+      </mesh>
     </group>
   );
 }

@@ -26,6 +26,9 @@ export type MemoryDTO = {
   status: "DRAFT" | "PUBLISHED";
   stage: { name: string; color: string } | null;
   media: MediaDTO[];
+  /** quién lo publicó (y quién lo editó por última vez, si fue otra persona) */
+  author: { name: string; relation: string | null } | null;
+  editor: { name: string; relation: string | null } | null;
 };
 
 export type MilestoneDTO = {
@@ -64,13 +67,31 @@ export type BirthDTO = {
 
 export type SceneDTO = { id: SceneId; title: string; phrase: string | null; subtitle: string | null; enabled: boolean };
 
-export type ViewerDTO = { id: string; name: string; role: RoleId; relation: string | null };
+export type ViewerDTO = { id: string; name: string; role: RoleId; relation: string | null; guest?: boolean };
+
+export type Companion = "stego" | "trice" | "ptero" | "baby";
+
+/** Un capítulo tal como se muestra: los siete de la historia y los que crea la familia. */
+export type ChapterDTO = {
+  key: string;
+  slug: string;
+  /** capítulo de la historia (null si lo creó la familia) */
+  builtin: SceneId | null;
+  /** valor para el formulario: "ANTES" o "c:<id>" */
+  target: string;
+  title: string;
+  subtitle: string | null;
+  phrase: string | null;
+  accent: string;
+  wash: string;
+  companion: Companion;
+  memories: MemoryDTO[];
+};
 
 export type StoryData = {
   viewer: ViewerDTO;
   preview: boolean;
-  scenes: SceneDTO[];
-  memories: Record<SceneId, MemoryDTO[]>;
+  chapters: ChapterDTO[];
   birth: BirthDTO;
   milestones: MilestoneDTO[];
   letters: LetterDTO[];

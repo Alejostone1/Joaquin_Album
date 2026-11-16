@@ -7,6 +7,26 @@ import { AuthError, assertUser, hashPassword, verifyPassword } from "@/lib/auth"
 import { MILESTONE_TYPES, PRESENTATIONS, ROLE_LABELS, SCENES } from "@/lib/constants";
 import { db, schema } from "@/lib/db";
 import { deleteStoredMedia } from "@/lib/storage";
+import { logActivity } from "@/lib/activity";
+import { createHash, randomBytes } from "node:crypto";
+import { headers } from "next/headers";
+import { SCENE_META } from "@/lib/constants";
+
+const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
+async function siteOrigin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+async function chapterName(scene: string, chapterId: string | null) {
+  if (chapterId) {
+    const c = await db.query.chapters.findFirst({ where: eq(schema.chapters.id, chapterId) });
+    if (c) return c.title;
+  }
+  const row = await db.query.sceneConfigs.findFirst({ where: eq(schema.sceneConfigs.scene, scene as (typeof SCENES)[number]) });
+  return row?.title ?? SCENE_META[scene as (typeof SCENES)[number]]?.title ?? "la historia";
+}
 
 export type ActionResult = { ok: boolean; error?: string; id?: string; message?: string };
 
@@ -41,12 +61,18 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | ActionResult> {
 }
 
 // ——— Recuerdos ———
+/** "ANTES" → capítulo de la historia · "c:<id>" → capítulo creado por la familia */
+function parseTarget(v: string): { scene: string; chapterId?: string } {
+  if (v.startsWith("c:")) return { scene: "AVENTURAS", chapterId: v.slice(2) };
+  return { scene: v };
+}
 const MemorySchema = z.object({
   id: z.string().optional(),
   title: z.string().trim().min(1, "Ponle un título al recuerdo.").max(140),
   description: optText(4000),
   date: dateStr,
   scene: z.enum(SCENES),
+  chapterId: z.string().optional().transform((v) => v || null),
   presentation: z.enum(PRESENTATIONS),
   stageId: z.string().optional().transform((v) => v || null),
   tags: z.string().optional(),
@@ -63,7 +89,7 @@ export async function saveMemory(_prev: ActionResult, form: FormData): Promise<A
       title: form.get("title"),
       description: form.get("description") ?? undefined,
       date: form.get("date") ?? undefined,
-      scene: form.get("scene"),
+      ...parseTarget(String(form.get("scene") ?? "")),
       presentation: form.get("presentation"),
       stageId: form.get("stageId") ?? undefined,
       tags: form.get("tags") ?? undefined,
@@ -77,11 +103,20 @@ export async function saveMemory(_prev: ActionResult, form: FormData): Promise<A
       .filter(Boolean)
       .slice(0, 12);
     const coverId = data.coverId && data.mediaIds.includes(data.coverId) ? data.coverId : (data.mediaIds[0] ?? null);
+    let scene = data.scene;
+    if (data.chapterId) {
+      const ch = await db.query.chapters.findFirst({ where: eq(schema.chapters.id, data.chapterId) });
+      if (!ch) return { ok: false, error: "Ese capítulo ya no existe." };
+      scene = ch.afterScene;
+    }
+    const prev = data.id ? await db.query.memories.findFirst({ where: eq(schema.memories.id, data.id) }) : null;
     const values = {
       title: data.title,
       description: data.description,
       date: data.date ?? null,
-      scene: data.scene,
+      scene,
+      chapterId: data.chapterId,
+      updatedById: user.id,
       presentation: data.presentation,
       stageId: data.stageId,
       tags,
@@ -95,7 +130,7 @@ export async function saveMemory(_prev: ActionResult, form: FormData): Promise<A
         if (!row) throw new AuthError(403, "Ese recuerdo ya no existe.");
         await tx.delete(schema.memoryMedia).where(eq(schema.memoryMedia.memoryId, memoryId));
       } else {
-        const count = await tx.$count(schema.memories, eq(schema.memories.scene, data.scene));
+        const count = await tx.$count(schema.memories, eq(schema.memories.scene, scene));
         const [row] = await tx.insert(schema.memories).values({ ...values, order: count, createdById: user.id }).returning({ id: schema.memories.id });
         memoryId = row.id;
       }
@@ -104,6 +139,12 @@ export async function saveMemory(_prev: ActionResult, form: FormData): Promise<A
       }
       return memoryId!;
     });
+    const where = await chapterName(scene, data.chapterId);
+    const n = data.mediaIds.length;
+    const files = n ? ` con ${n} ${n === 1 ? "archivo" : "archivos"}` : "";
+    if (!prev) await logActivity(user, data.status === "PUBLISHED" ? "PUBLISH" : "CREATE", "MEMORY", `${data.status === "PUBLISHED" ? "publicó" : "guardó como borrador"} «${data.title}»${files} en ${where}`, id);
+    else if (prev.status !== data.status) await logActivity(user, data.status === "PUBLISHED" ? "PUBLISH" : "UNPUBLISH", "MEMORY", `${data.status === "PUBLISHED" ? "publicó" : "pasó a borrador"} «${data.title}» en ${where}`, id);
+    else await logActivity(user, "UPDATE", "MEMORY", `editó «${data.title}» en ${where}${files}`, id);
     refresh("/admin/recuerdos");
     return { ok: true, id, message: data.status === "PUBLISHED" ? "Recuerdo publicado." : "Borrador guardado." };
   }) as Promise<ActionResult>;
@@ -111,8 +152,9 @@ export async function saveMemory(_prev: ActionResult, form: FormData): Promise<A
 
 export async function deleteMemory(id: string): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("EDITOR");
-    await db.delete(schema.memories).where(eq(schema.memories.id, id));
+    const user = await assertUser("EDITOR");
+    const [row] = await db.delete(schema.memories).where(eq(schema.memories.id, id)).returning();
+    if (row) await logActivity(user, "DELETE", "MEMORY", `eliminó «${row.title}»`, null);
     refresh("/admin/recuerdos");
     return { ok: true };
   }) as Promise<ActionResult>;
@@ -120,8 +162,9 @@ export async function deleteMemory(id: string): Promise<ActionResult> {
 
 export async function setMemoryStatus(id: string, status: "DRAFT" | "PUBLISHED"): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("EDITOR");
-    await db.update(schema.memories).set({ status }).where(eq(schema.memories.id, id));
+    const user = await assertUser("EDITOR");
+    const [row] = await db.update(schema.memories).set({ status, updatedById: user.id }).where(eq(schema.memories.id, id)).returning();
+    if (row) await logActivity(user, status === "PUBLISHED" ? "PUBLISH" : "UNPUBLISH", "MEMORY", `${status === "PUBLISHED" ? "publicó" : "pasó a borrador"} «${row.title}»`, id);
     refresh("/admin/recuerdos");
     return { ok: true };
   }) as Promise<ActionResult>;
@@ -189,11 +232,12 @@ const MilestoneSchema = z.object({
 
 export async function saveMilestone(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("EDITOR");
+    const user = await assertUser("EDITOR");
     const data = MilestoneSchema.parse(Object.fromEntries(["id", "type", "title", "description", "date", "status", "mediaId", "stageId"].map((k) => [k, form.get(k) || undefined])));
     const { id, ...values } = data;
     if (id) await db.update(schema.milestones).set(values).where(eq(schema.milestones.id, id));
     else await db.insert(schema.milestones).values(values);
+    await logActivity(user, id ? "UPDATE" : "CREATE", "MILESTONE", `${id ? "editó" : "agregó"} el momento «${values.title}» en la línea de tiempo`, id ?? null);
     refresh("/admin/linea-de-tiempo");
     return { ok: true, message: "Momento guardado." };
   }) as Promise<ActionResult>;
@@ -218,13 +262,15 @@ const StageSchema = z.object({
 
 export async function saveStage(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("EDITOR");
+    const user = await assertUser("EDITOR");
     const data = StageSchema.parse({ id: form.get("id") || undefined, name: form.get("name"), description: form.get("description") ?? undefined, color: form.get("color") });
     const { id, ...values } = data;
+    let newId = id;
     if (id) await db.update(schema.stages).set(values).where(eq(schema.stages.id, id));
-    else await db.insert(schema.stages).values({ ...values, order: await db.$count(schema.stages) });
-    refresh("/admin/etapas");
-    return { ok: true, message: "Etapa guardada." };
+    else newId = (await db.insert(schema.stages).values({ ...values, order: await db.$count(schema.stages) }).returning({ id: schema.stages.id }))[0].id;
+    await logActivity(user, id ? "UPDATE" : "CREATE", "STAGE", `${id ? "editó" : "creó"} la etapa «${values.name}»`, newId);
+    refresh("/admin/etapas", "/admin/recuerdos/nuevo");
+    return { ok: true, id: newId, message: "Etapa guardada." };
   }) as Promise<ActionResult>;
 }
 
@@ -300,6 +346,7 @@ export async function saveBirth(_prev: ActionResult, form: FormData): Promise<Ac
       .parse(Object.fromEntries(["birthDate", "birthTime", "weight", "height", "place", "firstMeeting", "note", "mainPhotoId"].map((k) => [k, form.get(k) ?? undefined])));
     const values = { ...data, birthDate: data.birthDate ?? null, birthTime: data.birthTime ?? null };
     await db.insert(schema.birthInfo).values({ id: 1, ...values }).onConflictDoUpdate({ target: schema.birthInfo.id, set: values });
+    await logActivity(await assertUser("EDITOR"), "UPDATE", "BIRTH", "actualizó los datos del nacimiento");
     refresh("/admin/nacimiento");
     return { ok: true, message: "Datos del nacimiento guardados." };
   }) as Promise<ActionResult>;
@@ -320,6 +367,7 @@ export async function saveScene(_prev: ActionResult, form: FormData): Promise<Ac
       .parse({ scene: form.get("scene"), title: form.get("title"), subtitle: form.get("subtitle") ?? undefined, phrase: form.get("phrase") ?? undefined, enabled: form.get("enabled") === "on" });
     const { scene, ...values } = data;
     await db.insert(schema.sceneConfigs).values({ scene, ...values }).onConflictDoUpdate({ target: schema.sceneConfigs.scene, set: values });
+    await logActivity(await assertUser("EDITOR"), "UPDATE", "CHAPTER", `editó el capítulo «${values.title}»`, scene);
     refresh("/admin/escenas");
     return { ok: true, message: "Capítulo guardado." };
   }) as Promise<ActionResult>;
@@ -330,27 +378,35 @@ const ROLES = Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>;
 
 export async function createUser(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   return guard(async () => {
-    await assertUser("ADMIN");
+    const me = await assertUser("ADMIN");
     const data = z
       .object({
         name: z.string().trim().min(1, "Escribe el nombre.").max(80),
         email: z.string().trim().toLowerCase().email("Escribe un correo válido."),
         relation: optText(60),
         role: z.enum(ROLES as [string, ...string[]]),
-        password: z.string().min(8, "La clave debe tener al menos 8 caracteres.").max(200),
+        password: z.string().min(8, "La clave debe tener al menos 8 caracteres.").max(200).optional().or(z.literal("").transform(() => undefined)),
       })
       .parse(Object.fromEntries(["name", "email", "relation", "role", "password"].map((k) => [k, form.get(k) ?? undefined])));
     const exists = await db.query.users.findFirst({ where: eq(schema.users.email, data.email) });
     if (exists) return { ok: false, error: "Ya existe una persona con ese correo." };
-    await db.insert(schema.users).values({
-      name: data.name,
-      email: data.email,
-      relation: data.relation,
-      role: data.role as (typeof ROLES)[number],
-      passwordHash: await hashPassword(data.password),
-    });
+    const [row] = await db
+      .insert(schema.users)
+      .values({
+        name: data.name,
+        email: data.email,
+        relation: data.relation,
+        role: data.role as (typeof ROLES)[number],
+        passwordHash: data.password ? await hashPassword(data.password) : null,
+      })
+      .returning({ id: schema.users.id });
+    await logActivity(me, "INVITE", "USER", `dio acceso a ${data.name}${data.relation ? ` (${data.relation})` : ""}`, row.id);
     refresh("/admin/usuarios");
-    return { ok: true, message: `${data.name} ya puede entrar.` };
+    if (!data.password) {
+      const link = await issueInvite(row.id);
+      return { ok: true, id: row.id, message: link };
+    }
+    return { ok: true, id: row.id, message: `${data.name} ya puede entrar.` };
   }) as Promise<ActionResult>;
 }
 
@@ -404,7 +460,7 @@ export async function changeOwnPassword(_prev: ActionResult, form: FormData): Pr
       .object({ current: z.string().min(1, "Escribe tu clave actual."), next: z.string().min(8, "La nueva clave debe tener al menos 8 caracteres.").max(200) })
       .parse({ current: form.get("current"), next: form.get("next") });
     const row = await db.query.users.findFirst({ where: eq(schema.users.id, me.id) });
-    if (!row || !(await verifyPassword(data.current, row.passwordHash))) return { ok: false, error: "La clave actual no coincide." };
+    if (!row || !row.passwordHash || !(await verifyPassword(data.current, row.passwordHash))) return { ok: false, error: "La clave actual no coincide." };
     await db.update(schema.users).set({ passwordHash: await hashPassword(data.next) }).where(eq(schema.users.id, me.id));
     return { ok: true, message: "Tu clave quedó actualizada." };
   }) as Promise<ActionResult>;
@@ -418,4 +474,109 @@ export async function mediaUsage(ids: string[]) {
   const out: Record<string, number> = {};
   for (const r of rows) out[r.mediaId] = (out[r.mediaId] ?? 0) + 1;
   return out;
+}
+
+// ——— Invitaciones: la persona elige su propia clave ———
+const INVITE_DAYS = 14;
+async function issueInvite(userId: string) {
+  const token = randomBytes(24).toString("base64url");
+  await db
+    .update(schema.users)
+    .set({ inviteTokenHash: sha256(token), inviteExpiresAt: new Date(Date.now() + INVITE_DAYS * 864e5) })
+    .where(eq(schema.users.id, userId));
+  return `${await siteOrigin()}/invitacion/${token}`;
+}
+
+/** Crea (o renueva) el enlace para que alguien entre por primera vez o cambie su clave olvidada. */
+export async function createInviteLink(userId: string): Promise<ActionResult> {
+  return guard(async () => {
+    const me = await assertUser("ADMIN");
+    const u = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+    if (!u) return { ok: false, error: "Esa persona ya no existe." };
+    const link = await issueInvite(userId);
+    await logActivity(me, "INVITE", "USER", `creó un enlace de invitación para ${u.name}`, userId);
+    refresh("/admin/usuarios");
+    return { ok: true, message: link };
+  }) as Promise<ActionResult>;
+}
+
+// ——— Capítulos creados por la familia ———
+const COMPANIONS = ["stego", "trice", "ptero", "baby"] as const;
+const ChapterSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().trim().min(1, "Ponle un título al capítulo.").max(80),
+  subtitle: optText(60),
+  phrase: optText(240),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Elige un color."),
+  companion: z.enum(COMPANIONS),
+  afterScene: z.enum(SCENES),
+  enabled: z.boolean(),
+});
+
+export async function saveChapter(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  return guard(async () => {
+    const user = await assertUser("EDITOR");
+    const data = ChapterSchema.parse({
+      id: form.get("id") || undefined,
+      title: form.get("title"),
+      subtitle: form.get("subtitle") ?? undefined,
+      phrase: form.get("phrase") ?? undefined,
+      color: form.get("color") || "#9B7BE0",
+      companion: form.get("companion") || "stego",
+      afterScene: form.get("afterScene") || "AVENTURAS",
+      enabled: form.has("hasEnabled") ? form.get("enabled") === "on" : true,
+    });
+    const { id, ...values } = data;
+    let newId = id;
+    if (id) {
+      await db.update(schema.chapters).set(values).where(eq(schema.chapters.id, id));
+      await db.update(schema.memories).set({ scene: values.afterScene }).where(eq(schema.memories.chapterId, id));
+    } else {
+      const count = await db.$count(schema.chapters, eq(schema.chapters.afterScene, values.afterScene));
+      newId = (await db.insert(schema.chapters).values({ ...values, order: count, createdById: user.id }).returning({ id: schema.chapters.id }))[0].id;
+    }
+    await logActivity(user, id ? "UPDATE" : "CREATE", "CHAPTER", `${id ? "editó" : "creó"} el capítulo «${values.title}»`, newId);
+    refresh("/admin/escenas", "/admin/recuerdos/nuevo");
+    return { ok: true, id: newId, message: id ? "Capítulo guardado." : "Capítulo creado." };
+  }) as Promise<ActionResult>;
+}
+
+export async function deleteChapter(id: string): Promise<ActionResult> {
+  return guard(async () => {
+    const user = await assertUser("EDITOR");
+    const [row] = await db.delete(schema.chapters).where(eq(schema.chapters.id, id)).returning();
+    if (row) await logActivity(user, "DELETE", "CHAPTER", `eliminó el capítulo «${row.title}» (sus recuerdos pasaron a «${SCENE_META[row.afterScene].title}»)`);
+    refresh("/admin/escenas");
+    return { ok: true };
+  }) as Promise<ActionResult>;
+}
+
+// ——— Enlaces para compartir sin cuenta ———
+export async function createShareLink(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  return guard(async () => {
+    const user = await assertUser("ADMIN");
+    const data = z
+      .object({ label: z.string().trim().min(1, "Escribe para quién es el enlace.").max(80), days: z.coerce.number().int().min(0).max(3650) })
+      .parse({ label: form.get("label"), days: form.get("days") || 0 });
+    const token = randomBytes(24).toString("base64url");
+    await db.insert(schema.shareLinks).values({
+      tokenHash: sha256(token),
+      label: data.label,
+      createdById: user.id,
+      expiresAt: data.days ? new Date(Date.now() + data.days * 864e5) : null,
+    });
+    await logActivity(user, "SHARE", "SHARE", `creó un enlace para compartir el álbum con «${data.label}»`);
+    refresh("/admin/compartir");
+    return { ok: true, message: `${await siteOrigin()}/ver/${token}` };
+  }) as Promise<ActionResult>;
+}
+
+export async function revokeShareLink(id: string): Promise<ActionResult> {
+  return guard(async () => {
+    const user = await assertUser("ADMIN");
+    const [row] = await db.update(schema.shareLinks).set({ revokedAt: new Date() }).where(eq(schema.shareLinks.id, id)).returning();
+    if (row) await logActivity(user, "SHARE", "SHARE", `desactivó el enlace de «${row.label}»`);
+    refresh("/admin/compartir");
+    return { ok: true };
+  }) as Promise<ActionResult>;
 }

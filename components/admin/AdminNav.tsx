@@ -14,7 +14,9 @@ const ITEMS = [
   { href: "/admin/etapas", label: "Etapas", color: "#3C9BE0" },
   { href: "/admin/cartas", label: "Cartas", color: "#FF9F68" },
   { href: "/admin/escenas", label: "Capítulos", color: "#2F5D47" },
+  { href: "/admin/historial", label: "Historial", color: "#E86A9A" },
   { href: "/admin/usuarios", label: "Personas", color: "#9B7BE0", admin: true },
+  { href: "/admin/compartir", label: "Compartir álbum", color: "#1FB5B0", admin: true },
   { href: "/admin/cuenta", label: "Mi cuenta", color: "#6E8075" },
 ];
 

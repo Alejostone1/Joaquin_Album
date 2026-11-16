@@ -46,6 +46,11 @@ export const presentationEnum = pgEnum("presentation", [
   "SEQUENCE",
   "REVEAL",
   "MASK",
+  "SCRAPBOOK",
+  "CAROUSEL",
+  "DECK",
+  "STORYBOOK",
+  "BUBBLES",
 ]);
 export const milestoneTypeEnum = pgEnum("milestone_type", [
   "MES",
@@ -62,7 +67,10 @@ export const users = pgTable("users", {
   id: id(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  /** null mientras la persona no haya aceptado su invitación */
+  passwordHash: text("password_hash"),
+  inviteTokenHash: text("invite_token_hash"),
+  inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
   role: roleEnum("role").notNull().default("FAMILY"),
   relation: text("relation"),
   active: boolean("active").notNull().default(true),
@@ -114,6 +122,22 @@ export const stages = pgTable("stages", {
   createdAt: createdAt(),
 });
 
+/** Capítulos creados por la familia (además de los siete de la historia). */
+export const chapters = pgTable("chapters", {
+  id: id(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  phrase: text("phrase"),
+  color: text("color").notNull().default("#9B7BE0"),
+  companion: text("companion").notNull().default("stego"),
+  /** aparece justo después de este capítulo de la historia */
+  afterScene: sceneEnum("after_scene").notNull().default("AVENTURAS"),
+  order: integer("order").notNull().default(0),
+  enabled: boolean("enabled").notNull().default(true),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+});
+
 export const memories = pgTable(
   "memories",
   {
@@ -128,7 +152,9 @@ export const memories = pgTable(
     order: integer("order").notNull().default(0),
     stageId: text("stage_id").references(() => stages.id, { onDelete: "set null" }),
     coverId: text("cover_id").references(() => media.id, { onDelete: "set null" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
     createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    updatedById: text("updated_by_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -200,6 +226,35 @@ export const sceneConfigs = pgTable("scene_configs", {
   enabled: boolean("enabled").notNull().default(true),
 });
 
+/** Historial: quién hizo qué y cuándo. */
+export const activity = pgTable(
+  "activity",
+  {
+    id: id(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    userName: text("user_name").notNull(),
+    action: text("action").notNull(),
+    entity: text("entity").notNull(),
+    entityId: text("entity_id"),
+    summary: text("summary").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("activity_created_idx").on(t.createdAt)],
+);
+
+/** Enlaces para ver el álbum sin cuenta (sólo lectura, revocables). */
+export const shareLinks = pgTable("share_links", {
+  id: id(),
+  tokenHash: text("token_hash").notNull().unique(),
+  label: text("label").notNull(),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  uses: integer("uses").notNull().default(0),
+  createdAt: createdAt(),
+});
+
 // ——— Relaciones (API de consultas) ———
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
@@ -217,6 +272,9 @@ export const stagesRelations = relations(stages, ({ many }) => ({
 }));
 export const memoriesRelations = relations(memories, ({ one, many }) => ({
   stage: one(stages, { fields: [memories.stageId], references: [stages.id] }),
+  chapter: one(chapters, { fields: [memories.chapterId], references: [chapters.id] }),
+  author: one(users, { fields: [memories.createdById], references: [users.id], relationName: "memoryAuthor" }),
+  editor: one(users, { fields: [memories.updatedById], references: [users.id], relationName: "memoryEditor" }),
   cover: one(media, { fields: [memories.coverId], references: [media.id] }),
   media: many(memoryMedia),
 }));
@@ -236,6 +294,9 @@ export const birthInfoRelations = relations(birthInfo, ({ one }) => ({
 }));
 
 export type User = typeof users.$inferSelect;
+export type Chapter = typeof chapters.$inferSelect;
+export type Activity = typeof activity.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
 export type Media = typeof media.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type Stage = typeof stages.$inferSelect;

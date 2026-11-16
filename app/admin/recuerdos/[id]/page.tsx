@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { MemoryForm } from "@/components/admin/MemoryForm";
 import { PageTitle } from "@/components/admin/ui";
-import { loadLibrary, loadStages } from "@/lib/admin-data";
+import { loadChapterOptions, loadLibrary, loadStages } from "@/lib/admin-data";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
@@ -10,10 +10,11 @@ export default async function EditarRecuerdo({ params, searchParams }: { params:
   await requireUser("EDITOR");
   const { id } = await params;
   const { guardado } = await searchParams;
-  const [memory, library, stages] = await Promise.all([
+  const [memory, library, stages, chapters] = await Promise.all([
     db.query.memories.findFirst({ where: eq(schema.memories.id, id), with: { media: { orderBy: [asc(schema.memoryMedia.order)] } } }),
     loadLibrary(),
     loadStages(),
+    loadChapterOptions(),
   ]);
   if (!memory) notFound();
   return (
@@ -24,12 +25,13 @@ export default async function EditarRecuerdo({ params, searchParams }: { params:
         justSaved={guardado === "1"}
         library={library}
         stages={stages}
+        chapters={chapters}
         initial={{
           id: memory.id,
           title: memory.title,
           description: memory.description ?? "",
           date: memory.date ?? "",
-          scene: memory.scene,
+          scene: memory.chapterId ? `c:${memory.chapterId}` : memory.scene,
           presentation: memory.presentation,
           stageId: memory.stageId ?? "",
           tags: memory.tags.join(", "),

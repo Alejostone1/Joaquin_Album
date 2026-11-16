@@ -34,7 +34,7 @@ const CAM_PATH = new THREE.CatmullRomCurve3(
     new THREE.Vector3(7.5, 6.2, 20),
     new THREE.Vector3(1.5, 2.6, 13.5),
     new THREE.Vector3(-2.2, 1.55, 9.6),
-    new THREE.Vector3(0.1, 1.45, 6.6),
+    new THREE.Vector3(0.1, 1.35, 5.6),
   ],
   false,
   "centripetal",
@@ -46,16 +46,24 @@ const LOOK_PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(-1, 2.2, -6),
   new THREE.Vector3(-2.2, 1.1, -1.5),
   new THREE.Vector3(-1.6, 0.9, -0.8),
-  new THREE.Vector3(0, 0.95, 0),
+  new THREE.Vector3(0, 1.3, 0.2),
 ]);
 const FINAL_LOOK = LOOK_PATH.getPoint(1);
 
+// Papá (estegosaurio) llega desde los helechos; Mamá (triceratops) duerme junto al huevo de Joaquín
 const STEGO_FROM = new THREE.Vector3(-3.7, 0, -2.4);
-const STEGO_TO = new THREE.Vector3(-0.1, 0, 0.15);
+const STEGO_TO = new THREE.Vector3(-1.05, 0, 0.0);
+const MAMA_POS = new THREE.Vector3(1.05, 0, -0.1);
+const EGG_POS = new THREE.Vector3(0, 0, 1.25);
+const faceY = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.x - from.x, to.z - from.z);
 
 export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, sfx }: Props) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const stego = useRef<THREE.Group>(null!);
+  const mama = useRef<THREE.Group>(null!);
+  const [triceLook, setTriceLook] = useState<LookMode>("none");
+  const [hearts, setHearts] = useState(0);
+  const [labels, setLabels] = useState(false);
   const progress = useRef({ cam: 0, look: 0 });
   const phase = useRef<IntroPhase>("idle");
   const lookTarget = useRef(FINAL_LOOK.clone());
@@ -79,6 +87,8 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
   // posición inicial: el estegosaurio escondido entre los helechos
   useEffect(() => {
     stego.current.position.copy(STEGO_FROM);
+    mama.current.position.set(MAMA_POS.x, groundHeight(MAMA_POS.x, MAMA_POS.z), MAMA_POS.z);
+    mama.current.rotation.y = -0.55;
     stego.current.rotation.y = Math.atan2(STEGO_TO.x - STEGO_FROM.x, STEGO_TO.z - STEGO_FROM.z);
     camera.position.copy(CAM_PATH.getPoint(0));
     camera.lookAt(LOOK_PATH.getPoint(0));
@@ -92,7 +102,11 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       progress.current.cam = 1;
       progress.current.look = 1;
       s.position.copy(STEGO_TO);
-      s.rotation.y = 0.72;
+      s.rotation.y = faceY(STEGO_TO, EGG_POS);
+      mama.current.rotation.y = faceY(MAMA_POS, EGG_POS);
+      setTriceAction("idle");
+      setTriceLook("pointer");
+      setLabels(true);
       setStegoAction("idle");
       setStegoLook("pointer");
       setPhase("title");
@@ -101,8 +115,9 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       return () => clearTimeout(id);
     }
     setPhase("flying");
+    const m = mama.current;
     const tl = gsap.timeline();
-    tl.to(progress.current, { cam: 1, look: 1, duration: 13.5, ease: "power2.inOut" }, 0);
+    tl.to(progress.current, { cam: 1, look: 1, duration: 11.6, ease: "power2.inOut" }, 0);
     tl.call(() => sfx("whoosh"), [], 0.8);
     // un pterodáctilo pasa rozando la cámara
     tl.call(() => {
@@ -110,31 +125,53 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       sfx("flap");
     }, [], 3.4);
     tl.call(() => sfx("flap"), [], 6.2);
-    // aparece entre la vegetación
-    tl.call(() => setStegoAction("walk"), [], 8.6);
-    tl.to(s.position, { x: STEGO_TO.x, z: STEGO_TO.z, duration: 3.6, ease: "sine.inOut" }, 8.6);
+    // Papá aparece entre la vegetación y camina hacia Mamá
+    tl.call(() => setStegoAction("walk"), [], 7.2);
+    tl.to(s.position, { x: STEGO_TO.x, z: STEGO_TO.z, duration: 3.4, ease: "sine.inOut" }, 7.2);
+    tl.to(s.rotation, { y: faceY(STEGO_TO, MAMA_POS), duration: 0.8, ease: "sine.inOut" }, 9.9);
+    tl.call(() => setStegoAction("idle"), [], 10.6);
+    // Mamá despierta, se alegra y lo mira
     tl.call(() => {
-      setStegoAction("idle");
-      setStegoLook("camera");
-    }, [], 12.2);
-    // gira hacia la cámara, la mira y ruge (la cámara tiembla un poco)
-    tl.to(s.rotation, { y: 0.72, duration: 0.9, ease: "back.out(2)" }, 12.2);
+      setTriceAction("idle");
+      setTriceCel((k) => k + 1);
+      sfx("pop");
+    }, [], 10.8);
+    tl.to(m.rotation, { y: faceY(MAMA_POS, STEGO_TO), duration: 0.9, ease: "back.out(1.6)" }, 11.0);
+    // se acercan y juntan sus cabezas: corazones
+    tl.to(s.position, { x: STEGO_TO.x + 0.28, duration: 0.7, ease: "sine.inOut" }, 11.8);
+    tl.to(m.position, { x: MAMA_POS.x - 0.26, duration: 0.7, ease: "sine.inOut" }, 11.8);
     tl.call(() => {
-      sfx("rawr");
-      shake.current = 0.09;
-    }, [], 12.9);
-    tl.call(() => setStegoCel((k) => k + 1), [], 13.0);
+      setHearts((k) => k + 1);
+      setLabels(true);
+      sfx("sparkle");
+    }, [], 12.3);
+    tl.to(s.position, { x: STEGO_TO.x, duration: 0.8, ease: "sine.inOut" }, 13.3);
+    tl.to(m.position, { x: MAMA_POS.x, duration: 0.8, ease: "sine.inOut" }, 13.3);
+    // juntos miran el huevo de Joaquín… se mueve… ¡nace!
+    tl.to(s.rotation, { y: faceY(STEGO_TO, EGG_POS), duration: 0.8, ease: "back.out(1.6)" }, 13.5);
+    tl.to(m.rotation, { y: faceY(MAMA_POS, EGG_POS), duration: 0.8, ease: "back.out(1.6)" }, 13.6);
+    tl.call(() => {
+      setStegoLook("none");
+      setTriceLook("none");
+      shake.current = 0.05;
+    }, [], 14.2);
     tl.call(() => {
       sfx("chime");
       setPhase("title");
-      // el huevo se abre justo cuando aparece el nombre
       setHatched((h) => ({ ...h, main: true }));
       setTimeout(() => sfx("sparkle"), 300);
-    }, [], 13.6);
+    }, [], 14.8);
+    tl.call(() => {
+      setStegoCel((k) => k + 1);
+      setTriceCel((k) => k + 1);
+      sfx("rawr");
+      shake.current = 0.08;
+    }, [], 15.3);
     tl.call(() => {
       setStegoLook("pointer");
+      setTriceLook("pointer");
       setPhase("ready");
-    }, [], 15.4);
+    }, [], 16.6);
     return () => {
       tl.kill();
     };
@@ -155,7 +192,7 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
       duration: 1.6,
       ease: "power3.in",
       onUpdate: () => {
-        camera.position.lerpVectors(from, new THREE.Vector3(0, 1.2, 1.5), p.k);
+        camera.position.lerpVectors(from, new THREE.Vector3(0, 1.55, 2.5), p.k);
         camera.fov = 40 + p.k * 25;
         camera.updateProjectionMatrix();
       },
@@ -200,7 +237,7 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
     clearTimeout(triceTimer.current);
     setTriceAction("idle");
     setTriceCel((k) => k + 1);
-    triceTimer.current = setTimeout(() => setTriceAction("sleep"), 9000);
+    triceTimer.current = setTimeout(() => setTriceCel((k) => k + 1), 600);
   };
   const hatch = (id: string) => {
     if (hatched[id]) return;
@@ -209,7 +246,6 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
     setHatched((h) => ({ ...h, [id]: true }));
   };
 
-  const triceY = groundHeight(2.9, -0.9);
   return (
     <group>
       <CloudPass />
@@ -225,19 +261,23 @@ export function IntroScene({ start, skip, exitKey, shadows, onPhase, onExited, s
           setStegoCel((k) => k + 1);
         }}
       />
-      <Triceratops position={[2.9, triceY, -0.9]} rotation={[0, -0.9, 0]} scale={0.95} action={triceAction} celebrateKey={triceCel} shadows={shadows} onPoke={pokeTrice} />
+      <Triceratops groupRef={mama} flower scale={0.95} action={triceAction} look={triceLook} celebrateKey={triceCel} shadows={shadows} onPoke={pokeTrice} />
+      <Hearts burstKey={hearts} at={[0, 1.55, -0.05]} />
+      <NameTag visible={labels} target={stego} y={1.55} label="Papá" color="#2BA36B" />
+      <NameTag visible={labels} target={mama} y={1.4} label="Mamá" color="#E86A92" />
+      <NameTag visible={!!hatched.main} position={[EGG_POS.x, groundHeight(EGG_POS.x, EGG_POS.z) + 0.68, EGG_POS.z]} label="Joaquín" color="#F2A900" />
       <FlyingPtero shadows={shadows} celebrateKey={pteroCel} onPoke={() => {
         sfx("flap");
         setPteroCel((k) => k + 1);
       }} />
       {/* huevo principal, junto al claro */}
-      <BabyDino position={[1.35, groundHeight(1.35, 1.1), 1.1]} rotation={[0, -0.5, 0]} scale={0.62} hatched={!!hatched.main} onHatch={() => hatch("main")} shadows={shadows} />
+      <BabyDino position={[EGG_POS.x, groundHeight(EGG_POS.x, EGG_POS.z), EGG_POS.z]} rotation={[0, 0, 0]} scale={0.62} hatched={!!hatched.main} onHatch={() => hatch("main")} shadows={shadows} />
       {/* nido con huevos rosados (como el colgante) */}
-      <Nest position={[-1.75, groundHeight(-1.75, 1.9), 1.9]} />
-      <BabyDino position={[-1.88, groundHeight(-1.75, 1.9) + 0.05, 1.85]} rotation={[0, 0.4, 0.05]} scale={0.38}
+      <Nest position={[-2.6, groundHeight(-2.6, 1.7), 1.7]} />
+      <BabyDino position={[-2.73, groundHeight(-2.6, 1.7) + 0.05, 1.65]} rotation={[0, 0.4, 0.05]} scale={0.38}
         eggColor={{ base: "#F4CDBE", a: "#E2A58F", b: "#D98F7A" }} bodyColor="#BFE3F5"
         hatched={!!hatched.a} onHatch={() => hatch("a")} shadows={shadows} />
-      <BabyDino position={[-1.55, groundHeight(-1.75, 1.9) + 0.05, 2.05]} rotation={[0, -0.3, -0.06]} scale={0.34}
+      <BabyDino position={[-2.4, groundHeight(-2.6, 1.7) + 0.05, 1.85]} rotation={[0, -0.3, -0.06]} scale={0.34}
         eggColor={{ base: "#F6D9C8", a: "#E6B09A", b: "#9CC9A6" }} bodyColor="#D7EDA4"
         hatched={!!hatched.b} onHatch={() => hatch("b")} shadows={shadows} />
     </group>
@@ -399,5 +439,114 @@ function FlybyPtero({ flyKey, shadows }: { flyKey: number; shadows: boolean }) {
     <group ref={ref} visible={false}>
       <Pterodactyl action="fly" look="none" shadows={shadows} scale={2.2} />
     </group>
+  );
+}
+
+/** Corazones que suben cuando Papá y Mamá juntan sus cabezas. */
+function Hearts({ burstKey, at }: { burstKey: number; at: [number, number, number] }) {
+  const geo = useMemo(() => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, -0.12);
+    sh.bezierCurveTo(-0.02, -0.08, -0.16, -0.02, -0.16, 0.06);
+    sh.bezierCurveTo(-0.16, 0.14, -0.06, 0.17, 0, 0.09);
+    sh.bezierCurveTo(0.06, 0.17, 0.16, 0.14, 0.16, 0.06);
+    sh.bezierCurveTo(0.16, -0.02, 0.02, -0.08, 0, -0.12);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 3, curveSegments: 10 });
+    g.center();
+    return g;
+  }, []);
+  const mats = useMemo(() => ["#FF6F91", "#FF8FAB", "#FFB3C6", "#E8476F"].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.35, emissive: c, emissiveIntensity: 0.25 })), []);
+  const items = useMemo(() => Array.from({ length: 9 }, (_, i) => ({ dx: (Math.sin(i * 2.3) * 0.5), delay: i * 0.12, s: 0.7 + (i % 3) * 0.3, spin: (i % 2 ? 1 : -1) * (1 + i * 0.2) })), []);
+  const refs = useRef<THREE.Mesh[]>([]);
+  const t0 = useRef<number | null>(null);
+  const lastKey = useRef(burstKey);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (burstKey !== lastKey.current) {
+      lastKey.current = burstKey;
+      t0.current = t;
+    }
+    items.forEach((it, i) => {
+      const m = refs.current[i];
+      if (!m) return;
+      const k = t0.current === null ? -1 : (t - t0.current - it.delay) / 2.6;
+      if (k < 0 || k > 1) {
+        m.visible = false;
+        return;
+      }
+      m.visible = true;
+      const pop = Math.min(1, k * 6);
+      m.position.set(at[0] + it.dx * k + Math.sin(k * 9 + i) * 0.08, at[1] + k * 1.6, at[2]);
+      m.rotation.y = k * it.spin * 3;
+      m.scale.setScalar(it.s * pop * (1 - Math.max(0, k - 0.75) * 4));
+    });
+  });
+  return (
+    <group>
+      {items.map((_, i) => (
+        <mesh key={i} ref={(el) => void (refs.current[i] = el!)} geometry={geo} material={mats[i % mats.length]} visible={false} />
+      ))}
+    </group>
+  );
+}
+
+const tagCache = new Map<string, THREE.Texture>();
+function tagTexture(label: string, color: string) {
+  const key = label + color;
+  const hit = tagCache.get(key);
+  if (hit) return hit;
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 160;
+  const g = c.getContext("2d")!;
+  g.font = "700 76px Fredoka, 'Baloo 2', system-ui, sans-serif";
+  const w = Math.min(500, g.measureText(label).width + 90);
+  const x = (512 - w) / 2;
+  g.fillStyle = "rgba(255,252,245,0.95)";
+  g.strokeStyle = color;
+  g.lineWidth = 10;
+  g.beginPath();
+  g.roundRect(x, 18, w, 120, 60);
+  g.fill();
+  g.stroke();
+  g.fillStyle = color;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(label, 256, 82);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tagCache.set(key, tex);
+  return tex;
+}
+
+/** Etiqueta flotante con el nombre de cada personaje. */
+function NameTag({ visible, label, color, target, y = 1.5, position }: { visible: boolean; label: string; color: string; target?: React.RefObject<THREE.Group>; y?: number; position?: [number, number, number] }) {
+  const sp = useRef<THREE.Sprite>(null!);
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    // espera a que la fuente esté lista para dibujar el nombre
+    let alive = true;
+    document.fonts?.ready.then(() => alive && setTex(tagTexture(label, color)));
+    return () => {
+      alive = false;
+    };
+  }, [label, color]);
+  const k = useRef(0);
+  useFrame((state, delta) => {
+    k.current = THREE.MathUtils.damp(k.current, visible && tex ? 1 : 0, 7, delta);
+    const s = sp.current;
+    if (!s) return;
+    const bob = Math.sin(state.clock.elapsedTime * 2 + label.length) * 0.03;
+    if (target?.current) s.position.set(target.current.position.x, target.current.position.y + y + bob, target.current.position.z);
+    else if (position) s.position.set(position[0], position[1] + bob, position[2]);
+    const e = k.current;
+    s.scale.set(0.95 * e, 0.3 * e, 1);
+    (s.material as THREE.SpriteMaterial).opacity = e;
+    s.visible = e > 0.01;
+  });
+  return (
+    <sprite ref={sp} renderOrder={10}>
+      <spriteMaterial map={tex} transparent depthTest={false} depthWrite={false} toneMapped={false} fog={false} />
+    </sprite>
   );
 }

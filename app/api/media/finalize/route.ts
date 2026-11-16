@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, assertSameOrigin, assertUser } from "@/lib/auth";
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
       .insert(schema.media)
       .values({ ...ing, originalName: originalName || "archivo", createdById: user.id, alt: null })
       .returning();
+    await logActivity(user, "UPLOAD", "MEDIA", row.kind === "VIDEO" ? "subió un video" : "subió una foto", row.id);
     return NextResponse.json({ media: toMediaDTO(row), originalName: row.originalName, createdAt: row.createdAt });
   } catch (e) {
     if (e instanceof AuthError) return NextResponse.json({ error: e.message }, { status: e.status });

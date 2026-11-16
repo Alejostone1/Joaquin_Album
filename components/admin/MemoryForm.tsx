@@ -4,10 +4,10 @@ import { AnimatePresence, motion, Reorder } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { deleteMemory, saveMemory, type ActionResult } from "@/app/admin/actions";
+import { deleteMemory, saveChapter, saveMemory, saveStage, type ActionResult } from "@/app/admin/actions";
 import { Media } from "@/components/story/Media";
-import type { LibraryItem } from "@/lib/admin-data";
-import { PRESENTATION_LABELS, PRESENTATIONS, SCENE_META, SCENES, type PresentationId, type SceneId } from "@/lib/constants";
+import type { ChapterOption, LibraryItem } from "@/lib/admin-data";
+import { PRESENTATION_LABELS, PRESENTATIONS, SCENE_META, SCENES, type PresentationId } from "@/lib/constants";
 import { Footprint } from "@/components/ui/Watercolor";
 import { MediaPicker, Uploader } from "./MediaLibrary";
 import { ConfirmButton, FormMessage, Panel, useToast } from "./ui";
@@ -18,7 +18,8 @@ export type MemoryFormValue = {
   title: string;
   description: string;
   date: string;
-  scene: SceneId | "";
+  /** "ANTES" (capítulo de la historia) o "c:<id>" (capítulo de la familia) */
+  scene: string;
   presentation: PresentationId;
   stageId: string;
   tags: string;
@@ -105,6 +106,51 @@ export function StyleThumb({ id, color = "#21372B" }: { id: PresentationId; colo
         <path d="M30 5c-8 0-13 12-13 20 0 7 6 12 13 12s13-5 13-12C43 17 38 5 30 5z" fill={c} opacity=".5" />
       </>
     ),
+    SCRAPBOOK: (
+      <>
+        {box(1, 1, 58, 38, { fill: "#FBF3E4" })}
+        <g transform="rotate(-8 16 20)">{box(6, 8, 18, 22, { fill: "#fff", stroke: c, strokeWidth: 1.2 })}</g>
+        <g transform="rotate(7 40 18)">{box(32, 6, 20, 20, { fill: "#fff", stroke: c, strokeWidth: 1.2 })}</g>
+        <rect x="10" y="5" width="10" height="4" fill="#FFC93C" opacity=".85" transform="rotate(-8 15 7)" />
+        <rect x="37" y="3" width="10" height="4" fill="#8FD3F4" opacity=".85" transform="rotate(7 42 5)" />
+        <circle cx="50" cy="32" r="4" fill="#FFB7CF" />
+      </>
+    ),
+    CAROUSEL: (
+      <>
+        <ellipse cx="30" cy="34" rx="24" ry="4" fill={c} opacity=".12" />
+        {box(4, 12, 12, 16, { opacity: 0.25 })}
+        {box(44, 12, 12, 16, { opacity: 0.25 })}
+        {box(14, 8, 12, 22, { opacity: 0.4 })}
+        {box(34, 8, 12, 22, { opacity: 0.4 })}
+        {box(22, 5, 16, 27, { fill: "#FFFCF5", stroke: c, strokeWidth: 1.5 })}
+      </>
+    ),
+    DECK: (
+      <>
+        <g transform="rotate(8 34 20)">{box(22, 6, 22, 28, { opacity: 0.25 })}</g>
+        <g transform="rotate(-6 30 20)">{box(19, 6, 22, 28, { opacity: 0.4 })}</g>
+        <g transform="rotate(14 30 20)">{box(26, 4, 22, 28, { fill: "#FFFCF5", stroke: c, strokeWidth: 1.5 })}</g>
+        <path d="M6 20h8M10 16l-4 4 4 4" stroke={c} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      </>
+    ),
+    STORYBOOK: (
+      <>
+        <path d="M30 8C22 4 10 4 4 7v28c6-3 18-3 26 1 8-4 20-4 26-1V7c-6-3-18-3-26 1z" fill="#FFFBF1" stroke={c} strokeWidth="1.5" />
+        <path d="M30 8v28" stroke={c} strokeWidth="1.2" />
+        {box(9, 12, 16, 2, { opacity: 0.4 })}
+        {box(9, 17, 14, 2, { opacity: 0.4 })}
+        {box(34, 11, 17, 18, { opacity: 0.4 })}
+      </>
+    ),
+    BUBBLES: (
+      <>
+        <circle cx="16" cy="14" r="10" fill={c} opacity=".35" stroke="#fff" strokeWidth="2" />
+        <circle cx="40" cy="22" r="13" fill={c} opacity=".5" stroke="#fff" strokeWidth="2" />
+        <circle cx="20" cy="32" r="6" fill={c} opacity=".25" stroke="#fff" strokeWidth="2" />
+        <circle cx="52" cy="8" r="5" fill={c} opacity=".2" stroke="#fff" strokeWidth="2" />
+      </>
+    ),
   };
   return (
     <svg viewBox="0 0 60 40" className="h-10 w-16" aria-hidden>
@@ -139,18 +185,36 @@ function SaveButton({ label, disabled }: { label: string; disabled?: boolean }) 
   );
 }
 
-export function MemoryForm({ initial, library: lib, stages, justSaved = false }: { initial: MemoryFormValue; library: LibraryItem[]; stages: Array<{ id: string; name: string; color: string }>; justSaved?: boolean }) {
+type StageOpt = { id: string; name: string; color: string; description?: string | null };
+
+export function MemoryForm({
+  initial,
+  library: lib,
+  stages: initialStages,
+  chapters: initialChapters,
+  justSaved = false,
+}: {
+  initial: MemoryFormValue;
+  library: LibraryItem[];
+  stages: StageOpt[];
+  chapters: ChapterOption[];
+  justSaved?: boolean;
+}) {
+  const [chapters, setChapters] = useState(initialChapters);
+  const [stages, setStages] = useState(initialStages);
+  const [stageId, setStageId] = useState(initial.stageId);
+  const chapterOf = (t: string) => chapters.find((c) => c.target === t);
   const [state, action] = useActionState<ActionResult, FormData>(saveMemory, { ok: false });
   const [library, setLibrary] = useState(lib);
   const [mediaIds, setMediaIds] = useState(initial.mediaIds);
   const [coverId, setCoverId] = useState(initial.coverId);
   const [presentation, setPresentation] = useState(initial.presentation);
   const [status, setStatus] = useState(initial.status);
-  const [scene, setScene] = useState<SceneId | "">(initial.scene);
+  const [scene, setScene] = useState<string>(initial.scene);
   const [picker, setPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sceneError, setSceneError] = useState(false);
-  const [saved, setSaved] = useState<{ id: string; scene: SceneId; published: boolean } | null>(
+  const [saved, setSaved] = useState<{ id: string; scene: string; published: boolean } | null>(
     justSaved && initial.id && initial.scene ? { id: initial.id, scene: initial.scene, published: initial.status === "PUBLISHED" } : null,
   );
   const router = useRouter();
@@ -172,7 +236,7 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
 
   const byId = new Map(library.map((m) => [m.id, m]));
   const selected = mediaIds.map((id) => byId.get(id)).filter(Boolean) as LibraryItem[];
-  const accent = scene ? SCENE_META[scene].accent : "#2BA36B";
+  const accent = chapterOf(scene)?.accent ?? "#2BA36B";
   const move = (id: string, d: number) =>
     setMediaIds((ids) => {
       const i = ids.indexOf(id);
@@ -203,19 +267,20 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
       <input type="hidden" name="presentation" value={presentation} />
       <input type="hidden" name="status" value={status} />
       <input type="hidden" name="scene" value={scene} />
+      <input type="hidden" name="stageId" value={stageId} />
 
       <AnimatePresence>
         {saved && (
           <motion.div initial={{ opacity: 0, y: -16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }} className="rounded-[1.8rem] border-[3px] border-tinta bg-menta p-5 shadow-soft">
             <p className="font-heading text-2xl font-extrabold">¡Listo! 🦕</p>
             <p className="mt-1 font-ui font-bold text-tinta-soft">
-              {saved.published ? "El recuerdo ya se ve" : "Quedó como borrador"} en el capítulo «{SCENE_META[saved.scene].title}».
+              {saved.published ? "El recuerdo ya se ve" : "Quedó como borrador"} en el capítulo «{chapterOf(saved.scene)?.title ?? "la historia"}».
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href={`/historia${saved.published ? "" : "?preview=1"}#recuerdo-${saved.id}`} className="btn-candy py-2.5 text-base">
                 Verlo en la historia
               </Link>
-              <Link href={`/admin/recuerdos/nuevo?capitulo=${saved.scene}`} className="btn-soft">
+              <Link href={`/admin/recuerdos/nuevo?capitulo=${encodeURIComponent(saved.scene)}`} className="btn-soft">
                 Crear otro recuerdo
               </Link>
             </div>
@@ -226,17 +291,16 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
       <div ref={stepOne}>
         <Step n={1} title="¿En qué capítulo va?" hint="Es la parte de la historia donde aparecerá." color={accent}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Capítulo">
-            {SCENES.filter((s) => s !== "CARTAS").map((s, i) => {
-              const m = SCENE_META[s];
-              const on = scene === s;
+            {chapters.map((m, i) => {
+              const on = scene === m.target;
               return (
                 <motion.button
-                  key={s}
+                  key={m.target}
                   type="button"
                   role="radio"
                   aria-checked={on}
                   onClick={() => {
-                    setScene(s);
+                    setScene(m.target);
                     setSceneError(false);
                   }}
                   whileTap={{ scale: 0.96 }}
@@ -245,12 +309,20 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
                   style={{ borderColor: on ? m.accent : "rgba(33,55,43,.08)", background: on ? `${m.accent}1f` : m.wash }}
                 >
                   <Footprint className="h-6 w-6" color={m.accent} style={{ rotate: `${i % 2 ? 14 : -14}deg` }} />
-                  <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-tinta-mute">{m.chapter}</span>
+                  <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-tinta-mute">{m.custom ? "De la familia" : m.kicker}</span>
                   <span className="font-heading text-lg font-extrabold leading-tight">{m.title}</span>
                   {on && <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full font-bold text-papel" style={{ background: m.accent }}>✓</span>}
                 </motion.button>
               );
             })}
+            <NewChapterCard
+              onCreated={(c) => {
+                setChapters((cs) => [...cs, c]);
+                setScene(c.target);
+                setSceneError(false);
+                toast(`Capítulo «${c.title}» creado.`);
+              }}
+            />
           </div>
           {sceneError && <p className="mt-3 rounded-2xl bg-coral-100 px-4 py-2 font-ui text-sm font-bold text-coral-600">Elige el capítulo donde va este recuerdo.</p>}
         </Step>
@@ -321,47 +393,46 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
             </label>
             <input id="date" name="date" type="date" defaultValue={initial.date} className="field" />
           </div>
+          <StagePicker
+            stages={stages}
+            value={stageId}
+            onChange={setStageId}
+            onSaved={(st, isNew) => {
+              setStages((list) => (isNew ? [...list, st] : list.map((x) => (x.id === st.id ? st : x))));
+              setStageId(st.id);
+              toast(isNew ? `Etapa «${st.name}» creada.` : "Etapa actualizada.");
+            }}
+          />
+        </div>
+      </Step>
+
+      <Step n={4} title="¿Cómo se verá en la historia?" hint="Elige una animación. «Automático» escoge la mejor según cuántas fotos y videos tenga." color={accent}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {PRESENTATIONS.map((p) => (
+            <motion.button
+              key={p}
+              type="button"
+              onClick={() => setPresentation(p)}
+              aria-pressed={presentation === p}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition"
+              style={{ borderColor: presentation === p ? accent : "rgba(33,55,43,.1)", background: presentation === p ? `${accent}18` : undefined }}
+            >
+              <StyleThumb id={p} color={presentation === p ? accent : undefined} />
+              <span className="font-heading text-base font-bold leading-tight">{PRESENTATION_LABELS[p].name}</span>
+              <span className="font-ui text-[11px] font-semibold leading-snug text-tinta-mute">{PRESENTATION_LABELS[p].hint}</span>
+            </motion.button>
+          ))}
         </div>
       </Step>
 
       <details className="group rounded-[1.8rem] border-2 border-tinta/10 bg-papel p-5 shadow-soft sm:p-6">
         <summary className="cursor-pointer list-none font-heading text-xl font-extrabold">
-          <span className="inline-block transition group-open:rotate-90">›</span> Más opciones <span className="font-ui text-sm font-semibold text-tinta-mute">(estilo, edad, etiquetas)</span>
+          <span className="inline-block transition group-open:rotate-90">›</span> Más opciones <span className="font-ui text-sm font-semibold text-tinta-mute">(etiquetas, eliminar)</span>
         </summary>
         <div className="mt-5 space-y-5">
-          <div>
-            <p className="label">Cómo se verá en la historia</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {PRESENTATIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPresentation(p)}
-                  aria-pressed={presentation === p}
-                  className="flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition"
-                  style={{ borderColor: presentation === p ? accent : "rgba(33,55,43,.1)", background: presentation === p ? `${accent}18` : undefined }}
-                >
-                  <StyleThumb id={p} />
-                  <span className="font-heading text-base font-bold leading-tight">{PRESENTATION_LABELS[p].name}</span>
-                  <span className="font-ui text-[11px] font-semibold leading-snug text-tinta-mute">{PRESENTATION_LABELS[p].hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="stageId">
-                Edad o etapa (opcional)
-              </label>
-              <select id="stageId" name="stageId" defaultValue={initial.stageId} className="field">
-                <option value="">Sin etapa</option>
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div>
               <label className="label" htmlFor="tags">
                 Etiquetas (separadas por comas)
@@ -422,5 +493,151 @@ export function MemoryForm({ initial, library: lib, stages, justSaved = false }:
         onToggle={(id) => setMediaIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))}
       />
     </form>
+  );
+}
+
+/** Tarjeta para crear un capítulo nuevo sin salir del formulario. */
+function NewChapterCard({ onCreated }: { onCreated: (c: ChapterOption) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [color, setColor] = useState("#9B7BE0");
+  const [after, setAfter] = useState("AVENTURAS");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const create = async () => {
+    setBusy(true);
+    setErr(null);
+    const fd = new FormData();
+    fd.set("title", title);
+    fd.set("color", color);
+    fd.set("afterScene", after);
+    fd.set("companion", ["stego", "trice", "ptero", "baby"][title.length % 4]);
+    const r = await saveChapter({ ok: false }, fd);
+    setBusy(false);
+    if (!r.ok || !r.id) return setErr(r.error ?? "No se pudo crear.");
+    onCreated({ target: `c:${r.id}`, title: title.trim(), kicker: "Capítulo de la familia", accent: color, wash: `${color}1c`, custom: true });
+    setOpen(false);
+    setTitle("");
+  };
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex min-h-[7rem] flex-col items-center justify-center gap-1 rounded-2xl border-[3px] border-dashed border-tinta/20 p-3 text-center font-heading text-lg font-extrabold text-tinta-soft transition hover:border-tinta/40 hover:bg-white">
+        <span className="text-3xl leading-none">+</span>
+        Nuevo capítulo
+      </button>
+    );
+  return (
+    <div className="col-span-2 rounded-2xl border-[3px] p-4 sm:col-span-3" style={{ borderColor: color, background: `${color}14` }}>
+      <p className="font-heading text-lg font-extrabold">Nuevo capítulo</p>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="Ej.: Mi primera Navidad" className="field mt-2 font-heading text-xl font-bold" autoFocus />
+      <p className="label mt-3">Color</p>
+      <div className="flex flex-wrap gap-2">
+        {CHAPTER_COLORS.map((c) => (
+          <button key={c} type="button" onClick={() => setColor(c)} aria-label={`Color ${c}`} aria-pressed={color === c} className={`h-9 w-9 rounded-full border-[3px] transition ${color === c ? "scale-110 border-tinta" : "border-white"}`} style={{ background: c }} />
+        ))}
+      </div>
+      <label className="label mt-3" htmlFor="after">
+        Aparece después de
+      </label>
+      <select id="after" value={after} onChange={(e) => setAfter(e.target.value)} className="field">
+        {SCENES.map((s) => (
+          <option key={s} value={s}>
+            {SCENE_META[s].title}
+          </option>
+        ))}
+      </select>
+      {err && <p className="mt-2 font-ui text-sm font-bold text-coral-600">{err}</p>}
+      <div className="mt-4 flex gap-2">
+        <button type="button" onClick={create} disabled={busy || !title.trim()} className="btn-candy py-2 text-base disabled:opacity-50">
+          {busy ? "Creando…" : "Crear y elegir"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="btn-soft py-2">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CHAPTER_COLORS = ["#9B7BE0", "#2BA36B", "#FF8A7A", "#1FB5B0", "#F2A516", "#E86A9A", "#3C9BE0", "#FF9F68", "#7FB86F"];
+
+/** Etapa o edad: chips de colores, crear una nueva o editar la elegida aquí mismo. */
+function StagePicker({ stages, value, onChange, onSaved }: { stages: StageOpt[]; value: string; onChange: (id: string) => void; onSaved: (s: StageOpt, isNew: boolean) => void }) {
+  const [editing, setEditing] = useState<null | { id?: string; name: string; color: string; description: string }>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const current = stages.find((s) => s.id === value);
+  const save = async () => {
+    if (!editing) return;
+    setBusy(true);
+    setErr(null);
+    const fd = new FormData();
+    if (editing.id) fd.set("id", editing.id);
+    fd.set("name", editing.name);
+    fd.set("color", editing.color);
+    fd.set("description", editing.description);
+    const r = await saveStage({ ok: false }, fd);
+    setBusy(false);
+    if (!r.ok || !r.id) return setErr(r.error ?? "No se pudo guardar.");
+    onSaved({ id: r.id, name: editing.name.trim(), color: editing.color, description: editing.description || null }, !editing.id);
+    setEditing(null);
+  };
+  return (
+    <div>
+      <p className="label">Etapa o edad (opcional)</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onChange("")} aria-pressed={!value} className={`rounded-full border-2 px-4 py-2 font-ui text-sm font-bold transition ${!value ? "border-tinta bg-tinta text-papel" : "border-tinta/15 bg-white"}`}>
+          Sin etapa
+        </button>
+        {stages.map((st) => (
+          <motion.button
+            key={st.id}
+            type="button"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onChange(st.id)}
+            aria-pressed={value === st.id}
+            className="flex items-center gap-2 rounded-full border-2 px-4 py-2 font-ui text-sm font-bold transition"
+            style={{ borderColor: value === st.id ? st.color : "rgba(33,55,43,.12)", background: value === st.id ? `${st.color}40` : "#fff" }}
+          >
+            <span className="h-3 w-3 rounded-full" style={{ background: st.color }} />
+            {st.name}
+          </motion.button>
+        ))}
+        <button type="button" onClick={() => setEditing({ name: "", color: CHAPTER_COLORS[stages.length % CHAPTER_COLORS.length], description: "" })} className="rounded-full border-2 border-dashed border-tinta/25 px-4 py-2 font-ui text-sm font-bold text-tinta-soft hover:bg-white">
+          + Nueva etapa
+        </button>
+        {current && (
+          <button type="button" onClick={() => setEditing({ id: current.id, name: current.name, color: current.color, description: current.description ?? "" })} className="rounded-full px-3 py-2 font-ui text-sm font-bold text-turquesa underline decoration-2 underline-offset-4">
+            ✎ Editar «{current.name}»
+          </button>
+        )}
+      </div>
+      <AnimatePresence>
+        {editing && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="mt-3 rounded-2xl border-2 p-4" style={{ borderColor: editing.color, background: `${editing.color}18` }}>
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} maxLength={60} placeholder="Ej.: 0 a 3 meses" className="field font-heading text-lg font-bold" autoFocus />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {CHAPTER_COLORS.map((c) => (
+                    <button key={c} type="button" onClick={() => setEditing({ ...editing, color: c })} aria-label={`Color ${c}`} className={`h-8 w-8 rounded-full border-[3px] ${editing.color === c ? "border-tinta" : "border-white"}`} style={{ background: c }} />
+                  ))}
+                </div>
+              </div>
+              <textarea value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={2} maxLength={400} placeholder="Cuéntale algo a esta etapa (opcional)" className="field mt-3" />
+              {err && <p className="mt-2 font-ui text-sm font-bold text-coral-600">{err}</p>}
+              <div className="mt-3 flex gap-2">
+                <button type="button" onClick={save} disabled={busy || !editing.name.trim()} className="btn-candy py-2 text-base disabled:opacity-50">
+                  {busy ? "Guardando…" : editing.id ? "Guardar cambios" : "Crear etapa"}
+                </button>
+                <button type="button" onClick={() => setEditing(null)} className="btn-soft py-2">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

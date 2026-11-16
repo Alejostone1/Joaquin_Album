@@ -10,7 +10,7 @@ export default async function RecuerdosPage() {
   await requireUser("EDITOR");
   const rows = await db.query.memories.findMany({
     orderBy: [asc(schema.memories.order), asc(schema.memories.createdAt)],
-    with: { cover: true, media: true },
+    with: { cover: true, media: true, chapter: { columns: { title: true, color: true } }, author: { columns: { name: true } } },
   });
   const items = rows.map((m) => ({
     id: m.id,
@@ -21,6 +21,8 @@ export default async function RecuerdosPage() {
     presentation: m.presentation,
     cover: m.cover ? toMediaDTO(m.cover) : null,
     count: m.media.length,
+    chapter: m.chapter ? { title: m.chapter.title, color: m.chapter.color } : null,
+    author: m.author?.name ?? null,
   }));
   return (
     <div className="mx-auto max-w-5xl">

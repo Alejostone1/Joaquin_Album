@@ -9,9 +9,8 @@ import { AudioControls } from "@/components/audio/AudioControls";
 import { useAudio } from "@/components/audio/AudioProvider";
 import { BubbleWord } from "@/components/ui/BubbleWord";
 import { Footprint, WatercolorBlob } from "@/components/ui/Watercolor";
-import { SCENE_META, type SceneId } from "@/lib/constants";
 import { detectQuality, prefersReducedMotion } from "@/lib/quality";
-import type { StoryData } from "@/lib/types";
+import type { ChapterDTO, StoryData } from "@/lib/types";
 import { BirthScene, ChapterOpener, EmptyChapter, Ending, FamilyTable, LettersScene, MemoryList, Timeline } from "./chapters";
 import { ScrollTrigger } from "./useScrollFx";
 import { AmbientLayer, ChapterDivider, Curtain, ProgressTrail } from "./Ambient";
@@ -21,13 +20,14 @@ import { PteroArt, StegoArt, TriceArt } from "@/components/ui/DinoArt";
 const Companion = dynamic(() => import("./Companion"), { ssr: false });
 
 export function StoryExperience({ data }: { data: StoryData }) {
-  const scenes = data.scenes.filter((s) => s.enabled);
-  const [active, setActive] = useState<SceneId>(scenes[0]?.id ?? "ANTES");
+  const chapters = data.chapters;
+  const [active, setActive] = useState<string>(chapters[0]?.key ?? "ANTES");
   const [moving, setMoving] = useState(false);
   const [celebrate, setCelebrate] = useState(0);
   const [use3D, setUse3D] = useState<boolean | null>(null);
   const { play } = useAudio();
-  const canEdit = data.viewer.role !== "FAMILY";
+  const guest = !!data.viewer.guest;
+  const canEdit = !guest && data.viewer.role !== "FAMILY";
   const prevActive = useRef(active);
 
   useEffect(() => {
@@ -37,12 +37,12 @@ export function StoryExperience({ data }: { data: StoryData }) {
 
   // capítulo activo según el scroll
   useEffect(() => {
-    const triggers = scenes.map((s) =>
+    const triggers = chapters.map((c) =>
       ScrollTrigger.create({
-        trigger: `#${SCENE_META[s.id].slug}`,
+        trigger: `#${c.slug}`,
         start: "top 55%",
         end: "bottom 55%",
-        onToggle: (self) => self.isActive && setActive(s.id),
+        onToggle: (self) => self.isActive && setActive(c.key),
       }),
     );
     // las imágenes cambian alturas: recalcular cuando cargan
@@ -54,7 +54,7 @@ export function StoryExperience({ data }: { data: StoryData }) {
       window.removeEventListener("load", refresh);
       clearTimeout(id);
     };
-  }, [scenes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chapters.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (prevActive.current !== active) {
@@ -86,8 +86,8 @@ export function StoryExperience({ data }: { data: StoryData }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const meta = SCENE_META[active];
-  const go = (id: SceneId) => document.getElementById(SCENE_META[id].slug)?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  const meta = chapters.find((c) => c.key === active) ?? chapters[0];
+  const go = (key: string) => document.getElementById(chapters.find((c) => c.key === key)?.slug ?? "")?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" });
 
   return (
     <LightboxProvider>
@@ -99,7 +99,7 @@ export function StoryExperience({ data }: { data: StoryData }) {
       <div className="pointer-events-none fixed inset-0 -z-10 transition-colors duration-1000" style={{ background: meta.wash }} aria-hidden />
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-70" style={{ backgroundImage: "var(--grain)" }} aria-hidden />
 
-      <StoryHeader scenes={scenes.map((s) => s.id)} active={active} onGo={go} viewerName={data.viewer.name} canEdit={canEdit} />
+      <StoryHeader chapters={chapters} active={active} onGo={go} viewerName={data.viewer.name} canEdit={canEdit} guest={guest} />
 
       {data.preview && (
         <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full border-2 border-tinta bg-sol px-4 py-2 font-ui text-sm font-bold shadow-soft">
@@ -108,33 +108,33 @@ export function StoryExperience({ data }: { data: StoryData }) {
       )}
 
       <div className="relative z-[1]">
-      <Prologue scenes={scenes.map((s) => ({ id: s.id, title: s.title }))} onGo={go} name={data.viewer.name} />
+      <Prologue chapters={chapters} onGo={go} name={guest ? null : data.viewer.name} />
 
-      {scenes.map((scene, idx) => {
-        const m = SCENE_META[scene.id];
-        const list = data.memories[scene.id] ?? [];
+      {chapters.map((ch, idx) => {
+        const list = ch.memories;
+        const b = ch.builtin;
         return (
-          <div key={scene.id}>
-          {idx > 0 && <ChapterDivider accent={m.accent} index={idx} />}
-          <section id={m.slug} aria-labelledby={`${m.slug}-t`} className="relative scroll-mt-20">
-            <span id={`${m.slug}-t`} className="sr-only">
-              {scene.title}
+          <div key={ch.key}>
+          {idx > 0 && <ChapterDivider accent={ch.accent} index={idx} />}
+          <section id={ch.slug} aria-labelledby={`${ch.slug}-t`} className="relative scroll-mt-20">
+            <span id={`${ch.slug}-t`} className="sr-only">
+              {ch.title}
             </span>
-            <ChapterOpener scene={scene} meta={m} number={idx + 1} />
-            {scene.id === "LLEGADA" && <BirthScene birth={data.birth} accent={m.accent} canEdit={canEdit} />}
-            {scene.id === "CRECIENDO" && <Timeline milestones={data.milestones} accent={m.accent} canEdit={canEdit} />}
-            {scene.id === "FAMILIA" && <FamilyTable memories={list} accent={m.accent} />}
-            {scene.id === "CARTAS" ? (
-              <LettersScene letters={data.letters} viewer={data.viewer} birthDate={data.birth.birthDate} accent={m.accent} />
+            <ChapterOpener chapter={ch} number={idx + 1} />
+            {b === "LLEGADA" && <BirthScene birth={data.birth} accent={ch.accent} canEdit={canEdit} />}
+            {b === "CRECIENDO" && <Timeline milestones={data.milestones} accent={ch.accent} canEdit={canEdit} />}
+            {b === "FAMILIA" && <FamilyTable memories={list} accent={ch.accent} />}
+            {b === "CARTAS" ? (
+              <LettersScene letters={data.letters} viewer={data.viewer} birthDate={data.birth.birthDate} accent={ch.accent} />
             ) : list.length ? (
-              <MemoryList memories={list} accent={m.accent} />
-            ) : scene.id !== "LLEGADA" && scene.id !== "CRECIENDO" ? (
-              <EmptyChapter canEdit={canEdit} accent={m.accent} label={scene.title} />
+              <MemoryList memories={list} accent={ch.accent} />
+            ) : b !== "LLEGADA" && b !== "CRECIENDO" ? (
+              <EmptyChapter canEdit={canEdit} accent={ch.accent} label={ch.title} target={ch.target} />
             ) : null}
-            {canEdit && scene.id !== "CARTAS" && list.length > 0 && (
-              <div className="flex justify-center pb-16 pt-4">
-                <Link href={`/admin/recuerdos/nuevo?capitulo=${scene.id}`} className="btn-soft" style={{ boxShadow: `0 4px 0 ${m.accent}` }}>
-                  + Agregar un recuerdo a “{scene.title}”
+            {canEdit && b !== "CARTAS" && list.length > 0 && (
+              <div className="flex justify-center px-4 pb-16 pt-4">
+                <Link href={`/admin/recuerdos/nuevo?capitulo=${encodeURIComponent(ch.target)}`} className="btn-soft text-center" style={{ boxShadow: `0 4px 0 ${ch.accent}` }}>
+                  + Agregar un recuerdo a “{ch.title}”
                 </Link>
               </div>
             )}
@@ -148,7 +148,7 @@ export function StoryExperience({ data }: { data: StoryData }) {
 
       {canEdit && (
         <Link
-          href={`/admin/recuerdos/nuevo?capitulo=${active === "CARTAS" ? "AVENTURAS" : active}`}
+          href={`/admin/recuerdos/nuevo?capitulo=${encodeURIComponent(meta.builtin === "CARTAS" ? "AVENTURAS" : meta.target)}`}
           className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border-[3px] border-tinta px-5 py-3 font-heading text-base font-extrabold text-tinta shadow-[0_5px_0_#21372b] transition hover:-translate-y-1 sm:bottom-6 sm:right-6"
           style={{ background: meta.accent === "#2F5D47" ? "#BDECD3" : "#FFC93C" }}
         >
@@ -181,7 +181,7 @@ export function StoryExperience({ data }: { data: StoryData }) {
   );
 }
 
-function Prologue({ scenes, onGo, name }: { scenes: Array<{ id: SceneId; title: string }>; onGo: (id: SceneId) => void; name: string }) {
+function Prologue({ chapters, onGo, name }: { chapters: ChapterDTO[]; onGo: (key: string) => void; name: string | null }) {
   return (
     <section className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-5 pb-16 pt-28 text-center">
       <WatercolorBlob color="#FFE89A" seed={2} className="absolute -left-24 -top-10 h-[50vh] w-[50vh]" opacity={0.5} />
@@ -194,18 +194,18 @@ function Prologue({ scenes, onGo, name }: { scenes: Array<{ id: SceneId; title: 
         <BubbleWord as="h1" text="JOAQUÍN" className="text-[clamp(3.4rem,13vw,9rem)]" delay={0.2} />
       </div>
       <p className="relative mt-4 max-w-lg font-ui font-bold text-tinta-soft">
-        Hola, {name.split(" ")[0]}. Sigue las huellas: cada una es un capítulo de su historia.
+        {name ? `Hola, ${name.split(" ")[0]}. ` : "Bienvenido al álbum de la familia. "}Sigue las huellas: cada una es un capítulo de su historia.
       </p>
       <nav aria-label="Capítulos" className="relative mt-10 w-full max-w-4xl">
         <svg viewBox="0 0 800 120" className="absolute inset-x-0 top-1/2 hidden h-28 w-full -translate-y-1/2 sm:block" preserveAspectRatio="none" aria-hidden>
           <path d="M10 60 C 120 0, 220 120, 330 60 S 540 0, 650 60 S 760 110, 790 60" fill="none" stroke="#21372B" strokeOpacity=".22" strokeWidth="4" strokeDasharray="2 14" strokeLinecap="round" />
         </svg>
         <ol className="relative grid grid-cols-2 gap-3 sm:flex sm:justify-between">
-          {scenes.map((s, i) => {
-            const m = SCENE_META[s.id];
+          {chapters.map((s, i) => {
+            const m = s;
             return (
-              <motion.li key={s.id} initial={{ opacity: 0, y: 20, scale: 0.6 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.6 + i * 0.1, type: "spring", stiffness: 220, damping: 14 }} className={i % 2 ? "sm:translate-y-6" : "sm:-translate-y-6"}>
-                <button onClick={() => onGo(s.id)} className="group flex w-full flex-col items-center gap-1 rounded-2xl p-2 transition hover:-translate-y-1">
+              <motion.li key={s.key} initial={{ opacity: 0, y: 20, scale: 0.6 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.6 + i * 0.1, type: "spring", stiffness: 220, damping: 14 }} className={i % 2 ? "sm:translate-y-6" : "sm:-translate-y-6"}>
+                <button onClick={() => onGo(s.key)} className="group flex w-full flex-col items-center gap-1 rounded-2xl p-2 transition hover:-translate-y-1">
                   <span className="grid h-16 w-16 place-items-center rounded-full border-[3px] border-tinta bg-papel shadow-soft transition group-hover:scale-110" style={{ boxShadow: `0 5px 0 ${m.accent}` }}>
                     <Footprint className="h-8 w-8" color={m.accent} style={{ rotate: `${i % 2 ? 12 : -12}deg` }} />
                   </span>
@@ -224,7 +224,7 @@ function Prologue({ scenes, onGo, name }: { scenes: Array<{ id: SceneId; title: 
   );
 }
 
-function StoryHeader({ scenes, active, onGo, viewerName, canEdit }: { scenes: SceneId[]; active: SceneId; onGo: (id: SceneId) => void; viewerName: string; canEdit: boolean }) {
+function StoryHeader({ chapters, active, onGo, viewerName, canEdit, guest }: { chapters: ChapterDTO[]; active: string; onGo: (key: string) => void; viewerName: string; canEdit: boolean; guest: boolean }) {
   const [menu, setMenu] = useState(false);
   const router = useRouter();
   const logout = async () => {
@@ -238,8 +238,8 @@ function StoryHeader({ scenes, active, onGo, viewerName, canEdit }: { scenes: Sc
         <BubbleWord text="Joaquín" className="text-2xl" animate={false} />
       </button>
       <nav aria-label="Capítulos" className="hidden items-center gap-1 rounded-full bg-papel/85 px-2 py-1.5 shadow-soft backdrop-blur md:flex">
-        {scenes.map((id, i) => {
-          const m = SCENE_META[id];
+        {chapters.map((m, i) => {
+          const id = m.key;
           const on = id === active;
           return (
             <button key={id} onClick={() => onGo(id)} className="group relative grid h-9 w-9 place-items-center rounded-full transition" style={{ background: on ? `${m.accent}26` : undefined }} aria-current={on ? "step" : undefined} aria-label={m.title}>
@@ -260,12 +260,12 @@ function StoryHeader({ scenes, active, onGo, viewerName, canEdit }: { scenes: Sc
           <AnimatePresence>
             {menu && (
               <motion.div role="menu" initial={{ opacity: 0, y: -8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8 }} className="absolute right-0 top-14 w-64 rounded-3xl border-2 border-tinta bg-papel p-2 shadow-lift">
-                <p className="px-3 py-2 font-ui text-xs font-bold text-tinta-mute">Sesión de {viewerName}</p>
-                <div className="md:hidden">
-                  {scenes.map((id) => (
-                    <button key={id} role="menuitem" onClick={() => { setMenu(false); onGo(id); }} className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left font-heading font-bold hover:bg-crema">
-                      <Footprint className="h-4 w-4" color={SCENE_META[id].accent} />
-                      {SCENE_META[id].title}
+                <p className="px-3 py-2 font-ui text-xs font-bold text-tinta-mute">{guest ? `Álbum compartido · ${viewerName}` : `Sesión de ${viewerName}`}</p>
+                <div className="max-h-[50vh] overflow-y-auto md:hidden">
+                  {chapters.map((c) => (
+                    <button key={c.key} role="menuitem" onClick={() => { setMenu(false); onGo(c.key); }} className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left font-heading font-bold hover:bg-crema">
+                      <Footprint className="h-4 w-4 shrink-0" color={c.accent} />
+                      {c.title}
                     </button>
                   ))}
                   <hr className="my-1 border-tinta/10" />
@@ -278,9 +278,11 @@ function StoryHeader({ scenes, active, onGo, viewerName, canEdit }: { scenes: Sc
                 <Link role="menuitem" href="/" className="block rounded-2xl px-3 py-2 font-heading font-bold hover:bg-crema">
                   Volver al bosque
                 </Link>
-                <button role="menuitem" onClick={logout} className="block w-full rounded-2xl px-3 py-2 text-left font-heading font-bold text-coral-600 hover:bg-coral-100">
-                  Cerrar sesión
-                </button>
+                {!guest && (
+                  <button role="menuitem" onClick={logout} className="block w-full rounded-2xl px-3 py-2 text-left font-heading font-bold text-coral-600 hover:bg-coral-100">
+                    Cerrar sesión
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

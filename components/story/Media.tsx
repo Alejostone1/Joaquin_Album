@@ -54,7 +54,7 @@ export function Media({ media, className = "", imgClassName = "", sizes = "(min-
   }
 
   if (media.kind === "VIDEO") {
-    return <VideoTile media={media} className={className} imgClassName={imgClassName} style={style} onOpen={openable ? open : undefined} />;
+    return <VideoTile media={media} className={className} imgClassName={imgClassName} style={style} onOpen={openable ? open : undefined} contain={fill} />;
   }
 
   return (
@@ -94,54 +94,163 @@ export function Media({ media, className = "", imgClassName = "", sizes = "(min-
   );
 }
 
+const fmt = (t: number) => {
+  if (!Number.isFinite(t)) return "0:00";
+  const m = Math.floor(t / 60);
+  const sec = Math.floor(t % 60);
+  return `${m}:${String(sec).padStart(2, "0")}`;
+};
+
 /**
- * Video dentro de la historia: se reproduce solo, en silencio y en bucle cuando aparece
- * en pantalla (y se pausa al salir). Tocarlo lo abre en grande con sonido.
+ * Video dentro de la historia: empieza solo y en silencio cuando aparece en pantalla.
+ * Tiene controles propios: pausa, barra para adelantar, sonido y pantalla completa.
  */
-function VideoTile({ media, className, imgClassName, style, onOpen }: { media: MediaDTO; className: string; imgClassName: string; style?: React.CSSProperties; onOpen?: (e?: React.MouseEvent) => void }) {
+function VideoTile({ media, className, imgClassName, style, onOpen, contain }: { media: MediaDTO; className: string; imgClassName: string; style?: React.CSSProperties; onOpen?: (e?: React.MouseEvent) => void; contain?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [time, setTime] = useState(0);
+  const [dur, setDur] = useState(0);
+  const userPaused = useRef(false);
+  const [hint, setHint] = useState<"play" | "pause" | null>(null);
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
     const io = new IntersectionObserver(
       ([e]) => {
-        if (e.isIntersecting) v.play().catch(() => {});
-        else v.pause();
+        if (e.isIntersecting) {
+          if (!userPaused.current) v.play().catch(() => {});
+        } else v.pause();
       },
-      { threshold: 0.35 },
+      { threshold: 0.4 },
     );
     io.observe(v);
     return () => io.disconnect();
   }, []);
+
+  const toggle = (e?: React.SyntheticEvent) => {
+    e?.stopPropagation();
+    const v = ref.current;
+    if (!v) return;
+    if (v.paused) {
+      userPaused.current = false;
+      v.play().catch(() => {});
+      setHint("play");
+    } else {
+      userPaused.current = true;
+      v.pause();
+      setHint("pause");
+    }
+    setTimeout(() => setHint(null), 600);
+  };
+  const toggleSound = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    const v = ref.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+    // con sonido, se ve completo una vez (sin repetir); en silencio, se repite como fondo
+    v.loop = v.muted;
+    if (!v.muted) {
+      userPaused.current = false;
+      v.play().catch(() => {});
+    }
+  };
+  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = ref.current;
+    if (!v || !dur) return;
+    v.currentTime = (Number(e.target.value) / 1000) * dur;
+    setTime(v.currentTime);
+  };
+  const pct = dur ? (time / dur) * 100 : 0;
+
   return (
-    <div className={`group relative overflow-hidden bg-bosque-900 ${onOpen ? "cursor-zoom-in" : ""} ${className}`} style={style} onClick={onOpen}>
+    <div className={`group relative overflow-hidden bg-bosque-900 ${className}`} style={style}>
       <video
         ref={ref}
         src={`${media.orig}#t=0.1`}
-        className={`h-full w-full object-cover transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"} ${imgClassName}`}
+        className={`h-full w-full ${contain ? "object-contain" : "object-cover"} transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"} ${imgClassName}`}
         muted
         loop
         playsInline
         preload="metadata"
+        onClick={toggle}
         onLoadedData={() => setReady(true)}
         onCanPlay={() => setReady(true)}
+        onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
+        onDurationChange={(e) => setDur(e.currentTarget.duration)}
+        onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          userPaused.current = true;
+          setPlaying(false);
+        }}
         onError={() => setError(true)}
         aria-label={media.alt}
       />
-      {!ready && !error && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-bosque-700 to-bosque-900" />}
+      {!ready && !error && <div className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-br from-bosque-700 to-bosque-900" />}
       {error && (
         <div className="absolute inset-0 grid place-items-center p-4 text-center font-ui text-sm font-bold text-papel/90">
           Este video no se puede reproducir en este navegador.
         </div>
       )}
-      {onOpen && (
-        <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-papel/90 px-3 py-1.5 font-ui text-xs font-bold text-tinta shadow-soft transition group-hover:scale-105">
-          ▶ Ver con sonido
+      {/* señal de pausa/reproducir al tocar */}
+      {hint && (
+        <span key={hint + time} className="pointer-events-none absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 animate-[jq-pop_.6s_ease-out_forwards] place-items-center rounded-full bg-tinta/55 text-2xl text-papel">
+          {hint === "play" ? "▶" : "❚❚"}
         </span>
       )}
+      {!playing && !error && !hint && (
+        <button onClick={toggle} className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-[3px] border-papel bg-tinta/50 pl-1 text-2xl text-papel shadow-lift backdrop-blur transition hover:scale-110" aria-label="Reproducir video">
+          ▶
+        </button>
+      )}
       <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-tinta/70 px-2.5 py-1 font-ui text-[11px] font-bold uppercase tracking-wider text-papel">Video</span>
+      {/* controles */}
+      <div
+        className="absolute inset-x-0 bottom-0 z-[2] flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-8 text-papel opacity-100 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+        style={!playing ? { opacity: 1 } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={toggle} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-papel/20 text-sm font-bold hover:bg-papel/35" aria-label={playing ? "Pausar" : "Reproducir"}>
+          {playing ? "❚❚" : "▶"}
+        </button>
+        <span className="w-[4.6rem] shrink-0 font-ui text-[11px] font-bold tabular-nums">
+          {fmt(time)} / {fmt(dur)}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1000}
+          value={Math.round(pct * 10)}
+          onChange={seek}
+          className="jq-range h-1.5 min-w-0 flex-1 cursor-pointer"
+          style={{ ["--p" as string]: `${pct}%` }}
+          aria-label="Avanzar o retroceder el video"
+        />
+        <button onClick={toggleSound} className="grid h-9 shrink-0 place-items-center rounded-full bg-papel/20 px-3 font-ui text-xs font-bold hover:bg-papel/35" aria-label={muted ? "Activar sonido" : "Silenciar"}>
+          {muted ? "🔇 Sonido" : "🔊"}
+        </button>
+        {onOpen && (
+          <button
+            onClick={(e) => {
+              ref.current?.pause();
+              userPaused.current = true;
+              onOpen(e);
+            }}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-papel/20 hover:bg-papel/35"
+            aria-label="Ver en pantalla completa"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden>
+              <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

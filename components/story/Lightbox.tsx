@@ -91,7 +91,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                   }}
                 >
                   {item.kind === "VIDEO" ? (
-                    <video src={item.orig} controls autoPlay playsInline className="max-h-full max-w-full rounded-2xl shadow-lift" />
+                    <video src={item.orig} controls autoPlay playsInline controlsList="nodownload" className="max-h-full max-w-full rounded-2xl bg-black shadow-lift" />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -106,10 +106,10 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
               </AnimatePresence>
               {state.items.length > 1 && (
                 <>
-                  <button onClick={() => go(-1)} className="absolute left-3 top-1/2 hidden h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-papel/15 text-3xl hover:bg-papel/30 sm:grid" aria-label="Anterior">
+                  <button onClick={() => go(-1)} className="absolute left-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-papel/20 text-3xl backdrop-blur hover:bg-papel/30 sm:left-3 sm:h-14 sm:w-14" aria-label="Anterior">
                     ‹
                   </button>
-                  <button onClick={() => go(1)} className="absolute right-3 top-1/2 hidden h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-papel/15 text-3xl hover:bg-papel/30 sm:grid" aria-label="Siguiente">
+                  <button onClick={() => go(1)} className="absolute right-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-papel/20 text-3xl backdrop-blur hover:bg-papel/30 sm:right-3 sm:h-14 sm:w-14" aria-label="Siguiente">
                     ›
                   </button>
                 </>
@@ -118,9 +118,24 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
             <div className="min-h-[3.5rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center">
               {item.caption && <p className="font-heading text-lg font-semibold">{item.caption}</p>}
               {state.items.length > 1 && (
-                <div className="mt-2 flex justify-center gap-1.5" aria-hidden>
+                <div className="no-scrollbar mx-auto mt-2 flex max-w-full gap-2 overflow-x-auto px-2 pb-1 sm:justify-center">
                   {state.items.map((m, i) => (
-                    <span key={m.id} className="h-2 rounded-full bg-papel transition-all" style={{ width: i === state.index ? 22 : 8, opacity: i === state.index ? 1 : 0.4 }} />
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setDir(i > state.index ? 1 : -1);
+                        setState((s) => (s ? { ...s, index: i } : s));
+                      }}
+                      className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border-2 transition ${i === state.index ? "scale-110 border-sol" : "border-transparent opacity-50 hover:opacity-90"}`}
+                      aria-label={`Ir al archivo ${i + 1}`}
+                    >
+                      {m.kind === "VIDEO" ? (
+                        <span className="grid h-full w-full place-items-center bg-bosque-700 text-sm">▶</span>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.sm} alt="" className="h-full w-full object-cover" />
+                      )}
+                    </button>
                   ))}
                 </div>
               )}
