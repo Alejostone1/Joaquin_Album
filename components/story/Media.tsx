@@ -18,10 +18,12 @@ type Props = {
   /** si se indica, tocar la foto abre el visor a pantalla completa con estas fotos */
   gallery?: MediaDTO[];
   galleryTitle?: string;
+  /** clases extra para la barra de controles del video (p. ej. dejar espacio a botones flotantes) */
+  controlsClassName?: string;
 };
 
 /** Foto con miniatura borrosa mientras carga (carga progresiva) o video privado. */
-export function Media({ media, className = "", imgClassName = "", sizes = "(min-width: 1024px) 60vw, 100vw", priority, style, fill, gallery, galleryTitle }: Props) {
+export function Media({ media, className = "", imgClassName = "", sizes = "(min-width: 1024px) 60vw, 100vw", priority, style, fill, gallery, galleryTitle, controlsClassName = "" }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -54,7 +56,7 @@ export function Media({ media, className = "", imgClassName = "", sizes = "(min-
   }
 
   if (media.kind === "VIDEO") {
-    return <VideoTile media={media} className={className} imgClassName={imgClassName} style={style} onOpen={openable ? open : undefined} contain={fill} />;
+    return <VideoTile media={media} className={className} imgClassName={imgClassName} style={style} onOpen={openable ? open : undefined} contain={fill} controlsClassName={controlsClassName} />;
   }
 
   return (
@@ -105,7 +107,7 @@ const fmt = (t: number) => {
  * Video dentro de la historia: empieza solo y en silencio cuando aparece en pantalla.
  * Tiene controles propios: pausa, barra para adelantar, sonido y pantalla completa.
  */
-function VideoTile({ media, className, imgClassName, style, onOpen, contain }: { media: MediaDTO; className: string; imgClassName: string; style?: React.CSSProperties; onOpen?: (e?: React.MouseEvent) => void; contain?: boolean }) {
+function VideoTile({ media, className, imgClassName, style, onOpen, contain, controlsClassName = "" }: { media: MediaDTO; className: string; imgClassName: string; style?: React.CSSProperties; onOpen?: (e?: React.MouseEvent) => void; contain?: boolean; controlsClassName?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
@@ -212,7 +214,7 @@ function VideoTile({ media, className, imgClassName, style, onOpen, contain }: {
       <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-tinta/70 px-2.5 py-1 font-ui text-[11px] font-bold uppercase tracking-wider text-papel">Video</span>
       {/* controles */}
       <div
-        className="absolute inset-x-0 bottom-0 z-[2] flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-8 text-papel opacity-100 transition-opacity duration-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+        className={`absolute inset-x-0 bottom-0 z-[2] flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-8 text-papel ${controlsClassName} opacity-100 transition-opacity duration-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100`}
         style={!playing ? { opacity: 1 } : undefined}
         onClick={(e) => e.stopPropagation()}
       >

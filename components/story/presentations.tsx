@@ -48,7 +48,7 @@ export function Cinematic({ memory, accent }: P) {
         {shots.map((m, i) => (
           <motion.div
             key={m.id}
-            className={m.kind === "VIDEO" ? "absolute inset-x-0 bottom-[6vh] top-[6vh]" : "absolute inset-0"}
+            className={m.kind === "VIDEO" ? "absolute inset-x-0 bottom-[134px] top-[7vh] sm:bottom-[6vh]" : "absolute inset-0"}
             style={{ zIndex: i === active ? 2 : 1, pointerEvents: i === active ? "auto" : "none" }}
             initial={false}
             animate={{ opacity: i === active ? 1 : 0, scale: i === active ? 1 : 1.08, filter: i === active ? "blur(0px)" : "blur(6px)" }}
@@ -56,12 +56,12 @@ export function Cinematic({ memory, accent }: P) {
             aria-hidden={i !== active}
           >
             <div className={`h-full w-full ${i === active && m.kind !== "VIDEO" ? "jq-kenburns" : ""}`} style={{ animationDirection: i % 2 ? "reverse" : "normal" }}>
-              {Math.abs(i - active) <= 1 && <Media gallery={memory.media} galleryTitle={memory.title} media={m} className="h-full w-full" sizes="100vw" fill />}
+              {Math.abs(i - active) <= 1 && <Media gallery={memory.media} galleryTitle={memory.title} media={m} className="h-full w-full" sizes="100vw" fill controlsClassName="sm:!pl-[210px] sm:!pr-[230px]" />}
             </div>
           </motion.div>
         ))}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bosque-900/85 via-transparent to-bosque-900/25" />
-        <div className={`sub pointer-events-none absolute inset-x-0 z-[3] mx-auto max-w-5xl px-6 text-papel transition-[bottom] duration-700 ${current?.kind === "VIDEO" && active > 0 ? "bottom-[17vh]" : "bottom-[12vh]"}`}>
+        <div className={`sub pointer-events-none absolute inset-x-0 z-[3] mx-auto max-w-5xl px-6 text-papel transition-[bottom] duration-700 ${current?.kind === "VIDEO" && active > 0 ? "bottom-[calc(134px+4.5rem)] sm:bottom-[17vh]" : "bottom-[12vh]"}`}>
           <Meta memory={memory} accent={accent} light />
           <motion.div initial={false} animate={{ scale: active === 0 ? 1 : 0.62 }} style={{ transformOrigin: "left bottom" }} transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}>
             <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
