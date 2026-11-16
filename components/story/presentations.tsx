@@ -48,19 +48,20 @@ export function Cinematic({ memory, accent }: P) {
         {shots.map((m, i) => (
           <motion.div
             key={m.id}
-            className="absolute inset-0"
+            className={m.kind === "VIDEO" ? "absolute inset-x-0 bottom-[6vh] top-[6vh]" : "absolute inset-0"}
+            style={{ zIndex: i === active ? 2 : 1, pointerEvents: i === active ? "auto" : "none" }}
             initial={false}
             animate={{ opacity: i === active ? 1 : 0, scale: i === active ? 1 : 1.08, filter: i === active ? "blur(0px)" : "blur(6px)" }}
             transition={{ duration: 1.1, ease: [0.4, 0, 0.2, 1] }}
             aria-hidden={i !== active}
           >
-            <div className={`h-full w-full ${i === active ? "jq-kenburns" : ""}`} style={{ animationDirection: i % 2 ? "reverse" : "normal" }}>
+            <div className={`h-full w-full ${i === active && m.kind !== "VIDEO" ? "jq-kenburns" : ""}`} style={{ animationDirection: i % 2 ? "reverse" : "normal" }}>
               {Math.abs(i - active) <= 1 && <Media gallery={memory.media} galleryTitle={memory.title} media={m} className="h-full w-full" sizes="100vw" fill />}
             </div>
           </motion.div>
         ))}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bosque-900/85 via-transparent to-bosque-900/25" />
-        <div className="sub pointer-events-none absolute inset-x-0 bottom-[12vh] z-[3] mx-auto max-w-5xl px-6 text-papel">
+        <div className={`sub pointer-events-none absolute inset-x-0 z-[3] mx-auto max-w-5xl px-6 text-papel transition-[bottom] duration-700 ${current?.kind === "VIDEO" && active > 0 ? "bottom-[17vh]" : "bottom-[12vh]"}`}>
           <Meta memory={memory} accent={accent} light />
           <motion.div initial={false} animate={{ scale: active === 0 ? 1 : 0.62 }} style={{ transformOrigin: "left bottom" }} transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}>
             <Title className="mt-3 text-5xl drop-shadow-lg sm:text-7xl">{memory.title}</Title>
@@ -93,7 +94,18 @@ export function Cinematic({ memory, accent }: P) {
           </div>
         )}
         {shots.length > 1 && (
-          <NavArrows light className="absolute bottom-[3.2vh] right-5 z-[4] sm:bottom-[13vh] sm:right-8" onPrev={() => goShot(active - 1)} onNext={() => goShot(active + 1)} />
+          <>
+            {active > 0 && (
+              <button onClick={() => goShot(active - 1)} className="absolute left-2 top-1/2 z-[4] grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border-2 border-papel/70 bg-tinta/30 text-3xl font-bold text-papel backdrop-blur transition hover:scale-110 sm:left-5 sm:h-14 sm:w-14" aria-label="Anterior">
+                ‹
+              </button>
+            )}
+            {active < shots.length - 1 && (
+              <button onClick={() => goShot(active + 1)} className="absolute right-2 top-1/2 z-[4] grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border-2 border-papel/70 bg-tinta/30 text-3xl font-bold text-papel backdrop-blur transition hover:scale-110 sm:right-5 sm:h-14 sm:w-14" aria-label="Siguiente">
+                ›
+              </button>
+            )}
+          </>
         )}
       </div>
     </section>
@@ -305,6 +317,7 @@ export function Sequence({ memory, accent }: P) {
             <motion.div
               key={m.id}
               className="absolute inset-0"
+              style={{ zIndex: i === active ? 2 : 1, pointerEvents: i === active ? "auto" : "none" }}
               initial={false}
               animate={{ opacity: i === active ? 1 : 0, scale: i === active ? 1 : i < active ? 0.92 : 1.06, rotate: i === active ? 0 : i < active ? -3 : 3, x: i < active ? -40 : i > active ? 40 : 0 }}
               transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
